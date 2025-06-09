@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import { auth } from "./firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -58,8 +59,6 @@ const Home = () => {
         axios.get("http://localhost:5000/daily-quote"),
         axios.get("http://localhost:5000/leaderboard")
       ]);
-
-      console.log("Menu API response:", menuResponse.data);
 
       setMenu(menuResponse.data.menu);
       setVotes(menuResponse.data.votes);
@@ -138,16 +137,30 @@ const Home = () => {
               <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>{user.email}</p>
             </div>
           </div>
-          <button onClick={handleLogout} style={{
-            backgroundColor: "#d32f2f",
-            color: "white",
-            padding: "8px 16px",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer"
-          }}>
-            Logout
-          </button>
+          <div style={{ display: "flex", gap: "1rem" }}>
+            <Link to="/stats">
+              <button style={{
+                backgroundColor: "#1976d2",
+                color: "white",
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer"
+              }}>
+                📊 View Stats
+              </button>
+            </Link>
+            <button onClick={handleLogout} style={{
+              backgroundColor: "#d32f2f",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer"
+            }}>
+              Logout
+            </button>
+          </div>
         </div>
       )}
 
