@@ -53,18 +53,26 @@ const Home = () => {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-
       const [menuResponse, quoteResponse, leaderboardResponse] = await Promise.all([
         axios.get("http://localhost:5000/menu"),
         axios.get("http://localhost:5000/daily-quote"),
         axios.get("http://localhost:5000/leaderboard")
       ]);
 
-      setMenu(menuResponse.data.menu);
-      setVotes(menuResponse.data.votes);
-      setDay(menuResponse.data.day);
-      setQuote(quoteResponse.data.quote);
-      setLeaderboard(leaderboardResponse.data);
+      const menuData = menuResponse.data?.menu || {
+        breakfast: [],
+        lunch: [],
+        snacks: [],
+        dinner: []
+      };
+      const votesData = menuResponse.data?.votes || {};
+      const dayData = menuResponse.data?.day || "";
+
+      setMenu(menuData);
+      setVotes(votesData);
+      setDay(dayData);
+      setQuote(quoteResponse.data?.quote || "");
+      setLeaderboard(leaderboardResponse.data || []);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -79,7 +87,7 @@ const Home = () => {
     }
 
     try {
-      const response = await axios.post("http://localhost:5000/vote", 
+      const response = await axios.post("http://localhost:5000/vote",
         { item, type },
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
@@ -150,6 +158,21 @@ const Home = () => {
                 📊 View Stats
               </button>
             </Link>
+
+            <Link to="/auntys-cafe">
+              <button style={{
+                backgroundColor: "#1976d2",
+                color: "white",
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer"
+              }}>
+                Aunty's Cafe
+              </button>
+            </Link>
+
+
             <button onClick={handleLogout} style={{
               backgroundColor: "#d32f2f",
               color: "white",
