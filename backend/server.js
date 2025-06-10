@@ -1,20 +1,19 @@
 const express = require("express");
 const cors = require("cors");
-const admin = require("firebase-admin");
-
-
+const { admin, db } = require("./firebaseAdmin");
+const cafeRoutes = require("./backedroutes");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initialize Firebase Admin SDK
-const serviceAccount = require("./serviceAccountKey.json"); // Download from Firebase Console
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
 
-const db = admin.firestore();
+
+
+// Use Aunty's Café routes
+app.use("/", cafeRoutes); // or "/api" if you prefer routes like /api/menu
+
+
 
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
