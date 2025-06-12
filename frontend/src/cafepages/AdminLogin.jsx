@@ -10,7 +10,7 @@ export default function AdminLogin() {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post("http://localhost:5000/admin-login", { adminId, password });
+      const res = await axios.post("http://localhost:5000/auntys-cafe/admin-login", { adminId, password });
       if (res.data.success) {
         navigate("/admin-dashboard");
       } else {
