@@ -81,6 +81,8 @@ const Home = () => {
   };
 
   const handleVote = async (item, type) => {
+    console.log("Sending vote:", item, type);
+
     if (!user || !authToken) {
       alert("Please log in to vote!");
       return;
