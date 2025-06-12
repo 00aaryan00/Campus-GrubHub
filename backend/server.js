@@ -11,7 +11,8 @@ app.use(express.json());
 
 
 // Use Aunty's Café routes
-app.use("/", cafeRoutes); // or "/api" if you prefer routes like /api/menu
+// app.use("/", cafeRoutes); // or "/api" if you prefer routes like /api/menu
+app.use("/auntys-cafe", require("./backedroutes")); // ✅ This line is required
 
 
 
@@ -128,11 +129,11 @@ async function initializeDishVotes() {
 // Middleware to verify Firebase token
 async function verifyToken(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
-  
+
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
   }
-  
+
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
     req.user = decodedToken;
@@ -174,21 +175,21 @@ app.get("/menu", async (req, res) => {
   try {
     const todayIndex = new Date().getDay();
     const today = days[todayIndex];
-    
+
     // Get menu from Firestore
     const menuDoc = await db.collection('menu').doc('weekly').get();
     const fullMenu = menuDoc.data();
     const todayMenu = fullMenu[today] || {};
-    
+
     // Get all vote counts
     const votesSnapshot = await db.collection('dishVotes').get();
     const votesMap = {};
-    
+
     votesSnapshot.forEach(doc => {
       const data = doc.data();
       votesMap[data.item] = { like: data.like, dislike: data.dislike };
     });
-    
+
     res.json({ menu: todayMenu, votes: votesMap, day: today });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch menu" });
@@ -197,37 +198,52 @@ app.get("/menu", async (req, res) => {
 
 // Vote API — like/dislike any item (requires authentication)
 app.post("/vote", verifyToken, async (req, res) => {
+    console.log("Received vote payload:", req.body);
+
   const { item, type } = req.body;
   const userId = req.user.uid;
-  
+
   if (!["like", "dislike"].includes(type)) {
     return res.status(400).json({ success: false, message: "Invalid vote type" });
   }
-  
+
+  if (!item || typeof item !== "string" || item.trim() === "") {
+    return res.status(400).json({ success: false, message: "Invalid item" });
+  }
+
+
+
   try {
     // Check if user already voted for this item
-    const userVoteRef = db.collection('userVotes').doc(`${userId}_${item}`);
-    const userVoteDoc = await userVoteRef.get();
-    
-    const dishVoteRef = db.collection('dishVotes').doc(item);
+    // const userVoteRef = db.collection('userVotes').doc(`${userId}_${item}`);
+
+    const safeDishId = item.replace(/\//g, "_");
+    const userVoteRef = db.collection('userVotes').doc(`${userId}_${safeDishId}`);
+    const dishVoteRef = db.collection('dishVotes').doc(safeDishId);
+
+
     const dishVoteDoc = await dishVoteRef.get();
-    
+
+    const userVoteDoc = await userVoteRef.get();
+
+    // const dishVoteRef = db.collection('dishVotes').doc(item);
+
     if (!dishVoteDoc.exists) {
       return res.status(400).json({ success: false, message: "Item not found" });
     }
-    
+
     let currentVote = null;
     if (userVoteDoc.exists) {
       currentVote = userVoteDoc.data().voteType;
     }
-    
+
     // If user is voting the same type again, remove the vote
     if (currentVote === type) {
       await userVoteRef.delete();
       await dishVoteRef.update({
         [type]: admin.firestore.FieldValue.increment(-1)
       });
-    } 
+    }
     // If user is changing vote type
     else if (currentVote && currentVote !== type) {
       await userVoteRef.set({
@@ -253,17 +269,17 @@ app.post("/vote", verifyToken, async (req, res) => {
         [type]: admin.firestore.FieldValue.increment(1)
       });
     }
-    
+
     // Get updated vote counts
     const updatedDoc = await dishVoteRef.get();
     const updatedData = updatedDoc.data();
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       updated: { like: updatedData.like, dislike: updatedData.dislike },
       userVote: currentVote === type ? null : type
     });
-    
+
   } catch (error) {
     console.error('Vote error:', error);
     res.status(500).json({ success: false, message: "Server error" });
@@ -277,13 +293,13 @@ app.get("/user-votes", verifyToken, async (req, res) => {
     const userVotesSnapshot = await db.collection('userVotes')
       .where('userId', '==', userId)
       .get();
-    
+
     const userVotes = {};
     userVotesSnapshot.forEach(doc => {
       const data = doc.data();
       userVotes[data.item] = data.voteType;
     });
-    
+
     res.json(userVotes);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch user votes" });
@@ -303,13 +319,13 @@ app.get("/leaderboard", async (req, res) => {
       .orderBy('like', 'desc')
       .limit(5)
       .get();
-    
+
     const leaderboard = [];
     votesSnapshot.forEach(doc => {
       const data = doc.data();
       leaderboard.push({ _id: data.item, count: data.like });
     });
-    
+
     res.json(leaderboard);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch leaderboard" });
