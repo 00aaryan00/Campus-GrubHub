@@ -134,15 +134,16 @@ export default function AuntysCafe() {
             {/* 📜 Display all feedbacks */}
             <div style={{ marginTop: "10px", fontStyle: "italic" }}>
               <strong>Feedbacks:</strong>
-              {dishVotes.comments.length === 0 ? (
-                <p>No feedback yet.</p>
-              ) : (
-                <ul style={{ paddingLeft: "20px" }}>
-                  {dishVotes.comments.map((c, idx) => (
-                    <li key={idx}>{c.comment}</li>
-                  ))}
-                </ul>
-              )}
+              {Array.isArray(dishVotes.comments) && dishVotes.comments.length > 0 ? (
+  <ul style={{ paddingLeft: "20px" }}>
+    {dishVotes.comments.map((c, idx) => (
+      <li key={idx}>{c.comment}</li>
+    ))}
+  </ul>
+) : (
+  <p>No feedback yet.</p>
+)}
+
             </div>
           </div>
         );
