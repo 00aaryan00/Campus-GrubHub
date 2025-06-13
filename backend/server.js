@@ -12,16 +12,9 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
 });
-
-
-
-
-
 // Use Aunty's Café routes
 // app.use("/", cafeRoutes); // or "/api" if you prefer routes like /api/menu
 app.use("/auntys-cafe", require("./backedroutes")); // ✅ This line is required
-
-
 
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 

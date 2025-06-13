@@ -113,13 +113,35 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleAccessPreOrder = () => {
+    // Navigate to the pre-order page
+    window.open("http://localhost:5173/auntys-cafe/preorder", "_blank");
+  };
+
   if (loading) {
     return <div style={{ padding: "20px" }}>Loading...</div>;
   }
 
   return (
     <div style={{ padding: "20px" }}>
-      <h2>Update Today's Special Menu</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2>Update Today's Special Menu</h2>
+        <button 
+          onClick={handleAccessPreOrder}
+          style={{ 
+            padding: "10px 20px",
+            backgroundColor: "#ff6b35",
+            color: "white",
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+            fontSize: "14px",
+            fontWeight: "bold"
+          }}
+        >
+          Access Aunty's Cafe Pre-Order
+        </button>
+      </div>
       
       {items.length === 0 && (
         <p style={{ color: "#666", fontStyle: "italic" }}>
