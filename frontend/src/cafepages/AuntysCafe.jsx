@@ -50,7 +50,7 @@ export default function AuntysCafe() {
   const handleFeedback = async (itemName) => {
     try {
       const comment = feedbacks[itemName];
-      if (!comment) {
+      if (!comment || comment.trim() === "") {
         alert("Please enter a comment.");
         return;
       }
@@ -63,35 +63,37 @@ export default function AuntysCafe() {
       alert("Feedback submitted!");
       setFeedbacks({ ...feedbacks, [itemName]: "" });
 
-      // Refresh feedbacks
+      // Refresh votes (which includes feedback)
       const voteRes = await axios.get("http://localhost:5000/auntys-cafe/dish-votes");
       setVotes(voteRes.data.votes || {});
     } catch (err) {
       console.error("Feedback error", err);
+      alert(err.response?.data?.error || "Error submitting feedback");
     }
   };
 
   return (
     <div style={{ padding: "20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2>Today’s Special Menu</h2>
+        <h2>Today's Special Menu</h2>
         <button onClick={() => navigate("/admin-login")}>Admin Login</button>
       </div>
 
       {menu.length === 0 && <p>No items available currently.</p>}
 
       {menu.map((item, index) => {
-        const dishId = item.name.replace(/\//g, "_");
+        const dishId = normalizeDocId(item.name);
         const userHasVoted = !!userVotes[dishId];
         const dishVotes = votes[dishId] || { likes: 0, dislikes: 0, comments: [] };
 
         return (
-          <div key={index} style={{
+          <div className="max-h-1/6" key={index} style={{
             border: "1px solid #ccc",
             borderRadius: "8px",
             margin: "10px 0",
             padding: "15px",
-            backgroundColor: "#f9f9f9"
+            backgroundColor: "#f9f9f9",
+            
           }}>
             <h3>{item.name} - ₹{item.price}</h3>
             <p>{item.veg ? "Veg" : "Non-Veg"} | {item.available ? "Available" : "Unavailable"}</p>
@@ -131,23 +133,32 @@ export default function AuntysCafe() {
               <button onClick={() => handleFeedback(item.name)}>Submit Feedback</button>
             </div>
 
-            {/* 📜 Display all feedbacks */}
-            <div style={{ marginTop: "10px", fontStyle: "italic" }}>
+            {/* Feedback display section */}
+            <div style={{ marginTop: "10px" }}>
               <strong>Feedbacks:</strong>
-              {Array.isArray(dishVotes.comments) && dishVotes.comments.length > 0 ? (
-  <ul style={{ paddingLeft: "20px" }}>
-    {dishVotes.comments.map((c, idx) => (
-      <li key={idx}>{c.comment}</li>
-    ))}
-  </ul>
-) : (
-  <p>No feedback yet.</p>
-)}
-
+              {dishVotes.comments && dishVotes.comments.length > 0 ? (
+                <ul style={{ paddingLeft: "20px", marginTop: "5px" }}>
+                  {dishVotes.comments.map((commentObj, idx) => (
+                    <li key={idx} style={{ marginBottom: "5px" }}>
+                      <div style={{ fontStyle: "italic" }}>"{commentObj.comment}"</div>
+                      <div style={{ fontSize: "0.8em", color: "#666" }}>
+                        - User {commentObj.userId} at {new Date(commentObj.timestamp).toLocaleString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ fontStyle: "italic" }}>No feedback yet.</p>
+              )}
             </div>
           </div>
         );
       })}
     </div>
   );
+}
+
+// Helper function to normalize dish names (same as backend)
+function normalizeDocId(name) {
+  return name.trim().toLowerCase().replace(/\s+/g, "_").replace(/\//g, "_");
 }
