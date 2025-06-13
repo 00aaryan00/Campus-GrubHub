@@ -2,220 +2,341 @@ const express = require("express");
 const router = express.Router();
 const { admin, db } = require("./firebaseAdmin");
 
-// 🔧 Normalize helper
-const normalizeDocId = (name) =>
+// Helper function to normalize document IDs
+const normalizeDocId = (name) => 
   name.trim().toLowerCase().replace(/\s+/g, "_").replace(/\//g, "_");
 
-// Admin Login
+/* ========== ADMIN ROUTES ========== */
 router.post("/admin-login", async (req, res) => {
   const { adminId, password } = req.body;
-  const doc = await db.collection("admins").doc(adminId).get();
-
-  if (!doc.exists || doc.data().password !== password) {
-    return res.json({ success: false });
+  try {
+    const doc = await db.collection("admins").doc(adminId).get();
+    if (!doc.exists || doc.data().password !== password) {
+      return res.status(401).json({ success: false, error: "Invalid credentials" });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Login failed" });
   }
-
-  return res.json({ success: true });
 });
 
-// Admin sets or updates special menu
+// Menu management
 router.post("/admin-dashboard", async (req, res) => {
-  const { items } = req.body;
-  const batch = db.batch();
+  try {
+    const { items } = req.body;
+    const batch = db.batch();
+    
+    items.forEach(item => {
+      const docRef = db.collection("specialMenu").doc(normalizeDocId(item.name));
+      batch.set(docRef, item, { merge: true });
+    });
 
-  items.forEach(item => {
-    const docRef = db.collection("specialMenu").doc(normalizeDocId(item.name));
-    batch.set(docRef, item, { merge: true });
-  });
-
-  await batch.commit();
-  res.json({ success: true });
+    await batch.commit();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Failed to update menu" });
+  }
 });
 
-// Admin fetches all special menu items
 router.get("/admin-dashboard", async (req, res) => {
   try {
     const snapshot = await db.collection("specialMenu").get();
     const items = snapshot.docs.map(doc => doc.data());
-    res.json({ items });
+    res.json({ success: true, items });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch admin items" });
+    res.status(500).json({ success: false, error: "Failed to fetch menu" });
   }
 });
 
-// Admin deletes a dish - FIXED VERSION
 router.delete("/admin-dashboard/:dishName", async (req, res) => {
-  const dishNameRaw = decodeURIComponent(req.params.dishName);
-  const normalizedDishName = normalizeDocId(dishNameRaw);
-
-  console.log("Delete request received:");
-  console.log("- Original dish name:", dishNameRaw);
-  console.log("- Normalized dish name:", normalizedDishName);
-
   try {
-    // Delete from specialMenu using normalized name (this is how it's stored)
-    const deleteResult = await db.collection("specialMenu").doc(normalizedDishName).delete();
-    console.log("✅ Deleted from specialMenu");
-
-    // Delete from cafeDishVotes using normalized name
-    await db.collection("cafeDishVotes").doc(normalizedDishName).delete();
-    console.log("✅ Deleted from cafeDishVotes");
-
-    // Clean up user votes - remove this dish from all user vote documents
-    const userVotesSnapshot = await db.collection("cafeUserVotes").get();
+    const dishName = decodeURIComponent(req.params.dishName);
+    const normalizedName = normalizeDocId(dishName);
     const batch = db.batch();
+
+    // Delete from menu
+    batch.delete(db.collection("specialMenu").doc(normalizedName));
     
-    let updatedUserVotes = 0;
-    userVotesSnapshot.forEach(doc => {
-      const userData = doc.data();
-      if (userData[normalizedDishName]) {
-        delete userData[normalizedDishName];
-        batch.set(doc.ref, userData);
-        updatedUserVotes++;
+    // Delete from votes
+    batch.delete(db.collection("cafeDishVotes").doc(normalizedName));
+    
+    // Clean user votes
+    const usersSnapshot = await db.collection("cafeUserVotes").get();
+    usersSnapshot.forEach(doc => {
+      if (doc.data()[normalizedName]) {
+        const userRef = db.collection("cafeUserVotes").doc(doc.id);
+        const updates = { [normalizedName]: admin.firestore.FieldValue.delete() };
+        batch.update(userRef, updates);
       }
     });
 
-    if (updatedUserVotes > 0) {
-      await batch.commit();
-      console.log(`✅ Cleaned up ${updatedUserVotes} user vote records`);
-    }
-
-    res.json({ 
-      success: true, 
-      message: "Item deleted successfully",
-      deletedItem: dishNameRaw,
-      normalizedName: normalizedDishName
-    });
+    await batch.commit();
+    res.json({ success: true, message: "Dish deleted successfully" });
   } catch (err) {
-    console.error("❌ Delete error:", err);
-    res.status(500).json({ 
-      error: "Failed to delete item", 
-      details: err.message,
-      dishName: dishNameRaw,
-      normalizedName: normalizedDishName
-    });
+    res.status(500).json({ success: false, error: "Failed to delete dish" });
   }
 });
 
-// User gets today's available menu
-router.get("/auntys-cafe", async (req, res) => {
-  try {
-    const snapshot = await db.collection("specialMenu")
-      .where("available", "==", true)
-      .get();
-
-    const items = snapshot.docs.map(doc => doc.data());
-    res.json({ items });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch menu" });
-  }
-});
-
-// /vote — only voting logic
-router.post("/vote", async (req, res) => {
-  const { userId, dishName, vote } = req.body;
-  const normalizedDishName = normalizeDocId(dishName);
-  const dishRef = db.collection("cafeDishVotes").doc(normalizedDishName);
-  const userRef = db.collection("cafeUserVotes").doc(userId);
-
-  try {
-    const userDoc = await userRef.get();
-    const userVotes = userDoc.exists ? userDoc.data() : {};
-
-    if (userVotes[normalizedDishName]) {
-      return res.status(400).json({ error: "User has already voted for this dish." });
-    }
-
-    await dishRef.set({}, { merge: true }); // Ensure doc exists
-
-    await userRef.set({
-      [normalizedDishName]: {
-        voted: true,
-        type: vote
-      }
-    }, { merge: true });
-
-    await dishRef.update({
-      [vote === "like" ? "likes" : "dislikes"]: admin.firestore.FieldValue.increment(1)
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Vote error", err);
-    res.status(500).json({ error: "Voting failed" });
-  }
-});
-
-// /feedback — only feedback logic
-router.post("/feedback", async (req, res) => {
-  const { userId, dishName, comment } = req.body;
-  const normalizedDishName = normalizeDocId(dishName);
-  const dishRef = db.collection("cafeDishVotes").doc(normalizedDishName);
-
-  if (!comment || comment.trim() === "") {
-    return res.status(400).json({ error: "Empty comment not allowed" });
-  }
-
-  try {
-    await dishRef.set({}, { merge: true }); // Ensure doc exists
-
-    await dishRef.update({
-      comments: admin.firestore.FieldValue.arrayUnion({
-        userId,
-        comment,
-        timestamp: new Date().toISOString()
-      })
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Feedback error", err);
-    res.status(500).json({ error: "Feedback failed" });
-  }
-});
-
-// Get like/dislike counts for all dishes
-router.get("/dish-votes", async (req, res) => {
-  try {
-    const snapshot = await db.collection("cafeDishVotes").get();
-    const votes = {};
-    snapshot.forEach(doc => {
-      votes[doc.id] = doc.data();
-    });
-    res.json({ votes });
-  } catch (err) {
-    console.error("Error fetching votes", err);
-    res.status(500).json({ error: "Failed to fetch votes" });
-  }
-});
-
-// ✅ ADDED: Frontend fetch today's menu
+/* ========== CAFE ROUTES ========== */
+// Get available menu
 router.get("/menu", async (req, res) => {
   try {
     const snapshot = await db.collection("specialMenu")
       .where("available", "==", true)
       .get();
-
-    const items = snapshot.docs.map(doc => doc.data());
-    res.json({ items });
+    res.json({ 
+      success: true, 
+      items: snapshot.docs.map(doc => doc.data()) 
+    });
   } catch (err) {
-    console.error("Menu fetch error", err);
-    res.status(500).json({ error: "Failed to fetch menu" });
+    res.status(500).json({ success: false, error: "Failed to fetch menu" });
   }
 });
 
-// ✅ ADDED: Frontend fetch user's previous votes
-router.get("/user-votes/:userId", async (req, res) => {
-  const { userId } = req.params;
+// // Voting system
+// router.post("/vote", async (req, res) => {
+//   try {
+//     const { userId, dishName, vote } = req.body;
+//     const normalizedName = normalizeDocId(dishName);
+//     const userRef = db.collection("cafeUserVotes").doc(userId);
+//     const dishRef = db.collection("cafeDishVotes").doc(normalizedName);
+
+//     // Check existing vote
+//     const userDoc = await userRef.get();
+//     if (userDoc.exists && userDoc.data()[normalizedName]) {
+//       return res.status(400).json({ 
+//         success: false,
+//         error: "Already voted",
+//         existingVote: userDoc.data()[normalizedName].type 
+//       });
+//     }
+
+//     // Update in transaction
+//     await db.runTransaction(async (t) => {
+//       t.set(userRef, { 
+//         [normalizedName]: { 
+//           type: vote, 
+//           timestamp: admin.firestore.FieldValue.serverTimestamp() 
+//         } 
+//       }, { merge: true });
+      
+//       t.update(dishRef, { 
+//         [vote === "like" ? "likes" : "dislikes"]: admin.firestore.FieldValue.increment(1) 
+//       }, { merge: true });
+//     });
+
+//     res.json({ success: true });
+//   } catch (err) {
+//     res.status(500).json({ success: false, error: "Voting failed" });
+//   }
+// });
+
+
+// Feedback system - Updated version
+// // Updated feedback endpoint
+// router.post("/feedback", async (req, res) => {
+//   try {
+//     const { userId, dishName, comment } = req.body;
+    
+//     // Validate inputs
+//     if (!userId || !dishName) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         error: "Missing required fields" 
+//       });
+//     }
+
+//     if (!comment?.trim()) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         error: "Comment cannot be empty" 
+//       });
+//     }
+
+//     const normalizedName = normalizeDocId(dishName);
+//     const dishRef = db.collection("cafeDishVotes").doc(normalizedName);
+
+//     // Create the feedback object with regular Date first
+//     const feedbackData = {
+//       userId,
+//       comment: comment.trim(),
+//       timestamp: new Date().toISOString() // Use regular Date here
+//     };
+
+//     // Initialize document if it doesn't exist
+//     await dishRef.set({
+//       likes: 0,
+//       dislikes: 0,
+//       comments: []
+//     }, { merge: true });
+
+//     // Add new comment
+//     await dishRef.update({
+//       comments: admin.firestore.FieldValue.arrayUnion(feedbackData)
+//     });
+
+//     res.json({ success: true });
+//   } catch (err) {
+//     console.error("Feedback Error:", {
+//       error: err.message,
+//       stack: err.stack,
+//       requestBody: req.body
+//     });
+//     res.status(500).json({ 
+//       success: false, 
+//       error: "Failed to submit feedback",
+//       details: process.env.NODE_ENV === 'development' ? err.message : undefined
+//     });
+//   }
+// });
+
+// Updated voting system endpoint
+router.post("/vote", async (req, res) => {
   try {
-    const doc = await db.collection("cafeUserVotes").doc(userId).get();
-    const votes = doc.exists ? doc.data() : {};
-    res.json({ votes });
+    const { userId, dishName, vote } = req.body;
+    const normalizedName = normalizeDocId(dishName);
+    
+    // Verify user exists
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "User not found" 
+      });
+    }
+
+    const userVotesRef = db.collection("cafeUserVotes").doc(userId);
+    const dishVotesRef = db.collection("cafeDishVotes").doc(normalizedName);
+
+    // Check if user already voted
+    const userVotesDoc = await userVotesRef.get();
+    if (userVotesDoc.exists && userVotesDoc.data()[normalizedName]) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Already voted",
+        existingVote: userVotesDoc.data()[normalizedName].type 
+      });
+    }
+
+    // Update both collections in a transaction
+    await db.runTransaction(async (t) => {
+      // Update user's vote record
+      t.set(userVotesRef, { 
+        [normalizedName]: { 
+          type: vote,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          userName: userDoc.data().displayName || "Anonymous" // Store user's name
+        } 
+      }, { merge: true });
+      
+      // Update dish vote counts
+      t.set(dishVotesRef, {
+        likes: admin.firestore.FieldValue.increment(vote === "like" ? 1 : 0),
+        dislikes: admin.firestore.FieldValue.increment(vote === "dislike" ? 1 : 0),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+
+    res.json({ success: true });
   } catch (err) {
-    console.error("User votes fetch error", err);
-    res.status(500).json({ error: "Failed to fetch user votes" });
+    console.error("Vote Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Voting failed",
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// ✅ FINAL export
+// Updated feedback endpoint
+router.post("/feedback", async (req, res) => {
+  try {
+    const { userId, dishName, comment } = req.body;
+    
+    // Validate inputs
+    if (!userId || !dishName) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing required fields" 
+      });
+    }
+
+    if (!comment?.trim()) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Comment cannot be empty" 
+      });
+    }
+
+    // Verify user exists
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "User not found" 
+      });
+    }
+
+    const normalizedName = normalizeDocId(dishName);
+    const dishRef = db.collection("cafeDishVotes").doc(normalizedName);
+
+    // Create feedback data with user info
+    const feedbackData = {
+      userId,
+      userName: userDoc.data().displayName|| "Anonymous",
+      comment: comment.trim(),
+      timestamp: new Date().toISOString()
+    };
+
+    // Initialize document if needed and add comment
+    await dishRef.set({
+      likes: 0,
+      dislikes: 0,
+      comments: []
+    }, { merge: true });
+
+    await dishRef.update({
+      comments: admin.firestore.FieldValue.arrayUnion(feedbackData)
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Feedback Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Failed to submit feedback",
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+
+
+
+
+// Get vote counts
+router.get("/dish-votes", async (req, res) => {
+  try {
+    const snapshot = await db.collection("cafeDishVotes").get();
+    const votes = {};
+    snapshot.forEach(doc => votes[doc.id] = doc.data());
+    res.json({ success: true, votes });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Failed to fetch votes" });
+  }
+});
+
+// Get user votes
+router.get("/user-votes/:userId", async (req, res) => {
+  try {
+    const doc = await db.collection("cafeUserVotes").doc(req.params.userId).get();
+    res.json({ 
+      success: true, 
+      votes: doc.exists ? doc.data() : {} 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Failed to fetch user votes" });
+  }
+});
+
 module.exports = router;
