@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { Link } from 'react-router-dom';
+
 
 export default function AdminDashboard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
+  
 
   // Load existing menu on mount
   useEffect(() => {
@@ -39,20 +42,20 @@ export default function AdminDashboard() {
 
     try {
       console.log("Attempting to delete:", name);
-      
+
       // ✅ Fixed: Make sure we're using the correct URL format
       const deleteUrl = `http://localhost:5000/auntys-cafe/admin-dashboard/${encodeURIComponent(name)}`;
       console.log("Delete URL:", deleteUrl);
-      
+
       const response = await axios.delete(deleteUrl);
       console.log("Delete response:", response.data);
-      
+
       // Update the UI immediately
       setItems(prevItems => prevItems.filter(item => item.name !== name));
       alert(`Successfully deleted "${name}"`);
     } catch (err) {
       console.error("Delete error:", err);
-      
+
       // Better error handling
       if (err.response) {
         console.error("Error response:", err.response.data);
@@ -80,11 +83,12 @@ export default function AdminDashboard() {
   };
 
   const handleSubmit = async () => {
+
     try {
       setLoading(true);
-      
+
       // Validate items before submitting
-      const validItems = items.filter(item => 
+      const validItems = items.filter(item =>
         item.name && item.name.trim() !== "" && item.price > 0
       );
 
@@ -98,9 +102,12 @@ export default function AdminDashboard() {
       const response = await axios.post("http://localhost:5000/auntys-cafe/admin-dashboard", {
         items: validItems
       });
-      
+
       console.log("Submit response:", response.data);
       alert("Menu updated successfully!");
+
+
+
     } catch (err) {
       console.error("Submit error:", err);
       if (err.response) {
@@ -124,6 +131,7 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ padding: "20px" }}>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2>Update Today's Special Menu</h2>
         <button 
@@ -149,75 +157,99 @@ export default function AdminDashboard() {
         </p>
       )}
 
-      {items.map((item, index) => (
-        <div key={index} style={{ 
-          border: "1px solid #ccc", 
-          padding: "15px", 
-          marginBottom: "10px",
-          borderRadius: "5px",
-          backgroundColor: "#f9f9f9"
-        }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <input
-              placeholder="Item name"
-              value={item.name || ""}
-              onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
-              style={{ minWidth: "150px" }}
-            />
-            <input
-              type="number"
-              placeholder="Price"
-              value={item.price || ""}
-              onChange={(e) => handleUpdateItem(index, 'price', e.target.value)}
-              style={{ width: "80px" }}
-            />
-            <select
-              value={item.veg ? "veg" : "nonveg"}
-              onChange={(e) => handleUpdateItem(index, 'veg', e.target.value)}
-            >
-              <option value="veg">Veg</option>
-              <option value="nonveg">Non-Veg</option>
-            </select>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+      <Link to="/auntys-cafe">
+        <button
+
+          className="fixed top-4 right-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md shadow-md"
+        >
+          Go to Aunty's Cafe
+        </button>
+      </Link>
+
+
+      <h2>Update Today's Special Menu</h2>
+
+
+      {
+        items.length === 0 && (
+          <p style={{ color: "#666", fontStyle: "italic" }}>
+            No menu items found. Click "Add Another Item" to start adding items.
+          </p>
+        )
+      }
+
+      {
+        items.map((item, index) => (
+          <div key={index} style={{
+            border: "1px solid #ccc",
+            padding: "15px",
+            marginBottom: "10px",
+            borderRadius: "5px",
+            backgroundColor: "#f9f9f9"
+          }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
               <input
-                type="checkbox"
-                checked={item.available || false}
-                onChange={(e) => handleUpdateItem(index, 'available', e.target.checked)}
+                placeholder="Item name"
+                value={item.name || ""}
+                onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
+                style={{ minWidth: "150px" }}
               />
-              Available
-            </label>
+              <input
+                type="number"
+                placeholder="Price"
+                value={item.price || ""}
+                onChange={(e) => handleUpdateItem(index, 'price', e.target.value)}
+                style={{ width: "80px" }}
+              />
+              <select
+                value={item.veg ? "veg" : "nonveg"}
+                onChange={(e) => handleUpdateItem(index, 'veg', e.target.value)}
+              >
+                <option value="veg">Veg</option>
+                <option value="nonveg">Non-Veg</option>
+              </select>
 
-            <button
-              style={{ 
-                background: "red", 
-                color: "white", 
-                border: "none",
-                padding: "5px 10px",
-                borderRadius: "3px",
-                cursor: "pointer"
-              }}
-              onClick={() => handleDeleteItem(item.name)}
-              disabled={!item.name || item.name.trim() === ""}
-            >
-              Delete
-            </button>
-          </div>
-          
-          {/* Debug info for development */}
-          {item.name && (
-            <div style={{ fontSize: "12px", color: "#666", marginTop: "5px" }}>
-              Normalized ID: {item.name.trim().toLowerCase().replace(/\s+/g, "_").replace(/\//g, "_")}
+              <label style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <input
+                  type="checkbox"
+                  checked={item.available || false}
+                  onChange={(e) => handleUpdateItem(index, 'available', e.target.checked)}
+                />
+                Available
+              </label>
+
+              <button
+                style={{
+                  background: "red",
+                  color: "white",
+                  border: "none",
+                  padding: "5px 10px",
+                  borderRadius: "3px",
+                  cursor: "pointer"
+                }}
+                onClick={() => handleDeleteItem(item.name)}
+                disabled={!item.name || item.name.trim() === ""}
+              >
+                Delete
+              </button>
             </div>
-          )}
-        </div>
-      ))}
+
+            {/* Debug info for development */}
+            {item.name && (
+              <div style={{ fontSize: "12px", color: "#666", marginTop: "5px" }}>
+                Normalized ID: {item.name.trim().toLowerCase().replace(/\s+/g, "_").replace(/\//g, "_")}
+              </div>
+            )}
+          </div>
+        ))
+      }
 
       <div style={{ marginTop: "20px" }}>
-        <button 
+        <button
           onClick={handleAddItem}
-          style={{ 
-            padding: "10px 15px", 
+          style={{
+            padding: "10px 15px",
             marginRight: "10px",
             backgroundColor: "#007bff",
             color: "white",
@@ -229,9 +261,9 @@ export default function AdminDashboard() {
         >
           Add Another Item
         </button>
-        <button 
-          onClick={handleSubmit} 
-          style={{ 
+        <button
+          onClick={handleSubmit}
+          style={{
             padding: "10px 15px",
             backgroundColor: "#28a745",
             color: "white",
@@ -244,7 +276,7 @@ export default function AdminDashboard() {
           Submit Menu
         </button>
       </div>
-      
+
       {/* Debug section - remove in production */}
       <div style={{ marginTop: "30px", padding: "10px", backgroundColor: "#f0f0f0", borderRadius: "5px" }}>
         <h4>Debug Info:</h4>
@@ -252,6 +284,6 @@ export default function AdminDashboard() {
         <p>Server URL: http://localhost:5000</p>
         <p>Items with names: {items.filter(item => item.name && item.name.trim() !== "").length}</p>
       </div>
-    </div>
+    </div >
   );
 }
