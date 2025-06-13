@@ -108,7 +108,10 @@ const AdminOrders = () => {
                 <div className="grid md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-gray-600 mb-1"><strong>Customer:</strong></p>
-                    <p className="text-gray-900">{order.userEmail}</p>
+                    <p className="text-gray-900">{order.userName || order.userEmail}</p>
+                    {order.userName && (
+                      <p className="text-sm text-gray-500">{order.userEmail}</p>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 mb-1"><strong>Order Time:</strong></p>
@@ -116,7 +119,7 @@ const AdminOrders = () => {
                   </div>
                 </div>
 
-                {/* Pickup Time Section */}
+                {/* Pickup Time Section - FIXED */}
                 <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                   <p className="text-sm font-medium text-gray-700 mb-2">Pickup Time:</p>
                   {order.pickupTime ? (
@@ -127,48 +130,59 @@ const AdminOrders = () => {
                           ...prev, 
                           [order.id]: prev[order.id] || order.pickupTime 
                         }))}
-                        className="text-blue-500 hover:text-blue-700 text-sm"
+                        className="text-blue-500 hover:text-blue-700 text-sm underline"
                       >
                         Edit
                       </button>
                     </div>
                   ) : (
-                    <p className="text-orange-600 font-medium">⏱ Not assigned yet</p>
+                    <button
+                      onClick={() => setEditingPickupTime(prev => ({ ...prev, [order.id]: '' }))}
+                      className="text-orange-600 font-medium hover:text-orange-700 cursor-pointer underline"
+                    >
+                      ⏱ Not assigned yet - Click to set time
+                    </button>
                   )}
                   
                   {editingPickupTime[order.id] !== undefined && (
-                    <div className="mt-2 flex gap-2">
-                      <select
-                        value={editingPickupTime[order.id]}
-                        onChange={(e) => setEditingPickupTime(prev => ({ 
-                          ...prev, 
-                          [order.id]: e.target.value 
-                        }))}
-                        className="border rounded px-3 py-1 text-sm"
-                      >
-                        <option value="">Select Time</option>
-                        <option value="2:00 PM">2:00 PM</option>
-                        <option value="2:30 PM">2:30 PM</option>
-                        <option value="3:00 PM">3:00 PM</option>
-                        <option value="3:30 PM">3:30 PM</option>
-                        <option value="4:00 PM">4:00 PM</option>
-                      </select>
-                      <button
-                        onClick={() => updatePickupTime(order.id)}
-                        className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                      >
-                        Set Time
-                      </button>
-                      <button
-                        onClick={() => setEditingPickupTime(prev => {
-                          const newState = { ...prev };
-                          delete newState[order.id];
-                          return newState;
-                        })}
-                        className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
-                      >
-                        Cancel
-                      </button>
+                    <div className="mt-3 p-3 border border-blue-200 bg-blue-50 rounded">
+                      <p className="text-sm font-medium text-blue-800 mb-2">Set Pickup Time:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        <select
+                          value={editingPickupTime[order.id]}
+                          onChange={(e) => setEditingPickupTime(prev => ({ 
+                            ...prev, 
+                            [order.id]: e.target.value 
+                          }))}
+                          className="border rounded px-3 py-2 text-sm min-w-[120px]"
+                        >
+                          <option value="">Select Time</option>
+                          <option value="2:00 PM">2:00 PM</option>
+                          <option value="2:30 PM">2:30 PM</option>
+                          <option value="3:00 PM">3:00 PM</option>
+                          <option value="3:30 PM">3:30 PM</option>
+                          <option value="4:00 PM">4:00 PM</option>
+                          <option value="4:30 PM">4:30 PM</option>
+                          <option value="5:00 PM">5:00 PM</option>
+                        </select>
+                        <button
+                          onClick={() => updatePickupTime(order.id)}
+                          disabled={!editingPickupTime[order.id]}
+                          className="px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          Set Time
+                        </button>
+                        <button
+                          onClick={() => setEditingPickupTime(prev => {
+                            const newState = { ...prev };
+                            delete newState[order.id];
+                            return newState;
+                          })}
+                          className="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -184,7 +198,7 @@ const AdminOrders = () => {
                           ...prev, 
                           [order.id]: prev[order.id] || order.adminNotes 
                         }))}
-                        className="text-blue-500 hover:text-blue-700 text-sm"
+                        className="text-blue-500 hover:text-blue-700 text-sm underline"
                       >
                         Edit
                       </button>
@@ -192,14 +206,14 @@ const AdminOrders = () => {
                   ) : (
                     <button
                       onClick={() => setEditingNotes(prev => ({ ...prev, [order.id]: '' }))}
-                      className="text-blue-500 hover:text-blue-700 text-sm"
+                      className="text-blue-500 hover:text-blue-700 text-sm underline"
                     >
                       + Add notes
                     </button>
                   )}
                   
                   {editingNotes[order.id] !== undefined && (
-                    <div className="mt-2">
+                    <div className="mt-3 p-3 border border-blue-200 bg-white rounded">
                       <textarea
                         value={editingNotes[order.id]}
                         onChange={(e) => setEditingNotes(prev => ({ 
@@ -208,12 +222,12 @@ const AdminOrders = () => {
                         }))}
                         placeholder="Add notes for customer..."
                         className="w-full border rounded px-3 py-2 text-sm"
-                        rows="2"
+                        rows="3"
                       />
                       <div className="flex gap-2 mt-2">
                         <button
                           onClick={() => updateAdminNotes(order.id)}
-                          className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                          className="px-4 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
                         >
                           Save Notes
                         </button>
@@ -223,7 +237,7 @@ const AdminOrders = () => {
                             delete newState[order.id];
                             return newState;
                           })}
-                          className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                          className="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
                         >
                           Cancel
                         </button>

@@ -37,38 +37,41 @@ const PreOrderMenu = () => {
   };
 
   const handlePlaceOrder = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) {
-        alert("Please login to place an order");
-        return;
-      }
-
-      setIsOrdering(true);
-
-      await addDoc(collection(db, "preOrders"), {
-        itemName: selectedItem.name,
-        price: selectedItem.price,
-        quantity,
-        totalAmount: selectedItem.price * quantity,
-        userEmail: user.email,
-        userId: user.uid,
-        orderTime: serverTimestamp(),
-        paid: true,
-        status: "Pending",
-        pickupTime: null,
-        adminNotes: ""
-      });
-
-      setStep(3);
-    } catch (error) {
-      console.error("Error placing order:", error);
-      alert("Failed to place order.");
-    } finally {
-      setIsOrdering(false);
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Please login to place an order");
+      return;
     }
-  };
+
+    const { uid, email, displayName } = user;
+
+    setIsOrdering(true);
+
+    await addDoc(collection(db, "preOrders"), {
+      itemName: selectedItem.name,
+      price: selectedItem.price,
+      quantity,
+      totalAmount: selectedItem.price * quantity,
+      userEmail: email || "", // fallback empty string if null
+      userId: uid,
+      userName: displayName || "", // also fallback if missing
+      orderTime: serverTimestamp(),
+      paid: true,
+      status: "Pending",
+      pickupTime: null,
+      adminNotes: ""
+    });
+
+    setStep(3);
+  } catch (error) {
+    console.error("Error placing order:", error);
+    alert("Failed to place order.");
+  } finally {
+    setIsOrdering(false);
+  }
+};
 
   return (
     <div className="p-4">
