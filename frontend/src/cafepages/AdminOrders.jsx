@@ -84,7 +84,7 @@ const AdminOrders = () => {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
-      <h2 className="text-3xl font-bold mb-6">Admin - Aunty's Café Pre-Orders</h2>
+      <h2 className="text-3xl font-bold mb-6">Admin - Pre-Orders</h2>
 
       {orders.length === 0 ? (
         <div className="text-center py-8">

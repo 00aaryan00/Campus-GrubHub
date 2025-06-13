@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Link } from 'react-router-dom';
+import { Link } from "react-router-dom";
 
 
 export default function AdminDashboard() {
@@ -122,7 +122,7 @@ export default function AdminDashboard() {
 
   const handleAccessPreOrder = () => {
     // Navigate to the pre-order page
-    window.open("http://localhost:5173/auntys-cafe/preorder", "_blank");
+    window.open("http://localhost:5173/admin/orders", "_blank");
   };
 
   if (loading) {
@@ -147,7 +147,7 @@ export default function AdminDashboard() {
             fontWeight: "bold"
           }}
         >
-          Access Aunty's Cafe Pre-Order
+          Manage Cafe Pre-Orders
         </button>
       </div>
       
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
       <Link to="/auntys-cafe">
         <button
 
-          className="fixed top-4 right-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md shadow-md"
+          className="fixed bottom-4 right-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md shadow-md"
         >
           Go to Aunty's Cafe
         </button>
