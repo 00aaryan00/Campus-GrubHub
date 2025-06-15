@@ -93,144 +93,54 @@ router.get("/menu", async (req, res) => {
   }
 });
 
-// // Voting system
-// router.post("/vote", async (req, res) => {
-//   try {
-//     const { userId, dishName, vote } = req.body;
-//     const normalizedName = normalizeDocId(dishName);
-//     const userRef = db.collection("cafeUserVotes").doc(userId);
-//     const dishRef = db.collection("cafeDishVotes").doc(normalizedName);
-
-//     // Check existing vote
-//     const userDoc = await userRef.get();
-//     if (userDoc.exists && userDoc.data()[normalizedName]) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: "Already voted",
-//         existingVote: userDoc.data()[normalizedName].type 
-//       });
-//     }
-
-//     // Update in transaction
-//     await db.runTransaction(async (t) => {
-//       t.set(userRef, { 
-//         [normalizedName]: { 
-//           type: vote, 
-//           timestamp: admin.firestore.FieldValue.serverTimestamp() 
-//         } 
-//       }, { merge: true });
-      
-//       t.update(dishRef, { 
-//         [vote === "like" ? "likes" : "dislikes"]: admin.firestore.FieldValue.increment(1) 
-//       }, { merge: true });
-//     });
-
-//     res.json({ success: true });
-//   } catch (err) {
-//     res.status(500).json({ success: false, error: "Voting failed" });
-//   }
-// });
-
-
-// Feedback system - Updated version
-// // Updated feedback endpoint
-// router.post("/feedback", async (req, res) => {
-//   try {
-//     const { userId, dishName, comment } = req.body;
-    
-//     // Validate inputs
-//     if (!userId || !dishName) {
-//       return res.status(400).json({ 
-//         success: false, 
-//         error: "Missing required fields" 
-//       });
-//     }
-
-//     if (!comment?.trim()) {
-//       return res.status(400).json({ 
-//         success: false, 
-//         error: "Comment cannot be empty" 
-//       });
-//     }
-
-//     const normalizedName = normalizeDocId(dishName);
-//     const dishRef = db.collection("cafeDishVotes").doc(normalizedName);
-
-//     // Create the feedback object with regular Date first
-//     const feedbackData = {
-//       userId,
-//       comment: comment.trim(),
-//       timestamp: new Date().toISOString() // Use regular Date here
-//     };
-
-//     // Initialize document if it doesn't exist
-//     await dishRef.set({
-//       likes: 0,
-//       dislikes: 0,
-//       comments: []
-//     }, { merge: true });
-
-//     // Add new comment
-//     await dishRef.update({
-//       comments: admin.firestore.FieldValue.arrayUnion(feedbackData)
-//     });
-
-//     res.json({ success: true });
-//   } catch (err) {
-//     console.error("Feedback Error:", {
-//       error: err.message,
-//       stack: err.stack,
-//       requestBody: req.body
-//     });
-//     res.status(500).json({ 
-//       success: false, 
-//       error: "Failed to submit feedback",
-//       details: process.env.NODE_ENV === 'development' ? err.message : undefined
-//     });
-//   }
-// });
-
 // Updated voting system endpoint
 router.post("/vote", async (req, res) => {
   try {
     const { userId, dishName, vote } = req.body;
     const normalizedName = normalizeDocId(dishName);
     
-    // Verify user exists
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "User not found" 
-      });
+    // Get user info from auth (Firebase Auth stores user info automatically)
+    let userName = "Anonymous";
+    try {
+      const userRecord = await admin.auth().getUser(userId);
+      userName = userRecord.displayName || userRecord.email || "Anonymous";
+    } catch (authError) {
+      console.log("Could not fetch user from auth, using anonymous");
     }
 
     const userVotesRef = db.collection("cafeUserVotes").doc(userId);
     const dishVotesRef = db.collection("cafeDishVotes").doc(normalizedName);
 
-    // Check if user already voted
+    // Check if user already voted for this dish
     const userVotesDoc = await userVotesRef.get();
-    if (userVotesDoc.exists && userVotesDoc.data()[normalizedName]) {
-      return res.status(400).json({ 
-        success: false,
-        error: "Already voted",
-        existingVote: userVotesDoc.data()[normalizedName].type 
-      });
-    }
+    const existingVote = userVotesDoc.exists ? userVotesDoc.data()[normalizedName] : null;
 
-    // Update both collections in a transaction
     await db.runTransaction(async (t) => {
+      if (existingVote) {
+        // If changing vote, first decrement the previous vote count
+        if (existingVote.type === 'like') {
+          t.update(dishVotesRef, {
+            likes: admin.firestore.FieldValue.increment(-1)
+          });
+        } else if (existingVote.type === 'dislike') {
+          t.update(dishVotesRef, {
+            dislikes: admin.firestore.FieldValue.increment(-1)
+          });
+        }
+      }
+
       // Update user's vote record
       t.set(userVotesRef, { 
         [normalizedName]: { 
           type: vote,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          userName: userDoc.data().displayName || "Anonymous" // Store user's name
+          userName: userName
         } 
       }, { merge: true });
       
       // Update dish vote counts
       t.set(dishVotesRef, {
+        dishName: dishName, // Store original dish name
         likes: admin.firestore.FieldValue.increment(vote === "like" ? 1 : 0),
         dislikes: admin.firestore.FieldValue.increment(vote === "dislike" ? 1 : 0),
         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
@@ -253,50 +163,50 @@ router.post("/feedback", async (req, res) => {
   try {
     const { userId, dishName, comment } = req.body;
     
-    // Validate inputs
-    if (!userId || !dishName) {
+    if (!userId || !dishName || !comment?.trim()) {
       return res.status(400).json({ 
         success: false, 
-        error: "Missing required fields" 
+        error: "Missing required fields or empty comment"
       });
     }
 
-    if (!comment?.trim()) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Comment cannot be empty" 
-      });
-    }
-
-    // Verify user exists
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "User not found" 
-      });
+    // Get user info from Firebase Auth
+    let userName = "Anonymous";
+    try {
+      const userRecord = await admin.auth().getUser(userId);
+      userName = userRecord.displayName || userRecord.email || "Anonymous";
+    } catch (authError) {
+      console.log("Could not fetch user from auth, using anonymous");
     }
 
     const normalizedName = normalizeDocId(dishName);
     const dishRef = db.collection("cafeDishVotes").doc(normalizedName);
 
-    // Create feedback data with user info
+    // Create the feedback data with a client-side timestamp
     const feedbackData = {
       userId,
-      userName: userDoc.data().displayName|| "Anonymous",
+      userName: userName,
       comment: comment.trim(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(), // Use client-side timestamp instead
+      dishName: dishName
     };
 
-    // Initialize document if needed and add comment
-    await dishRef.set({
-      likes: 0,
-      dislikes: 0,
-      comments: []
-    }, { merge: true });
-
-    await dishRef.update({
-      comments: admin.firestore.FieldValue.arrayUnion(feedbackData)
+    // Use a transaction to ensure atomic updates
+    await db.runTransaction(async (t) => {
+      const dishDoc = await t.get(dishRef);
+      
+      if (!dishDoc.exists) {
+        t.set(dishRef, {
+          dishName: dishName,
+          likes: 0,
+          dislikes: 0,
+          comments: [feedbackData] // Initialize with first comment
+        });
+      } else {
+        t.update(dishRef, {
+          comments: admin.firestore.FieldValue.arrayUnion(feedbackData)
+        });
+      }
     });
 
     res.json({ success: true });
@@ -309,10 +219,6 @@ router.post("/feedback", async (req, res) => {
     });
   }
 });
-
-
-
-
 
 // Get vote counts
 router.get("/dish-votes", async (req, res) => {
