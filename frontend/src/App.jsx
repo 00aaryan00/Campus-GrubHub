@@ -11,6 +11,9 @@ import AuntysCafe from "./cafepages/AuntysCafe";
 import AuntysCafePreOrder from './cafepages/AuntysCafePreOrder';
 import AdminOrders from './cafepages/AdminOrders';
 import UserOrderSummary from './cafepages/UserOrderSummary';
+import VoteAnalytics from './cafepages/analysis';
+import UserProfile from './messpages/userprofile';
+
 
 function App() {
   return (
@@ -26,6 +29,9 @@ function App() {
         <Route path="/auntys-cafe/preorder" element={<AuntysCafePreOrder />} />
         <Route path="/admin/orders" element={<AdminOrders />} />
        <Route path="/my-orders" element={<UserOrderSummary />} />
+       <Route path="/analytics" element={<VoteAnalytics />} />
+       <Route path="/profile" element={<UserProfile />} />
+
         
       </Routes>
     </Router>
