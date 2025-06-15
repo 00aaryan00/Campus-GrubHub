@@ -14,17 +14,17 @@ export default function AuntysCafe() {
   const [userId, setUserId] = useState(null);
 
 
-useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, (user) => {
-    if (user) {
-      setUserId(user.uid);  // automatically get userId from Firebase
-    } else {
-      navigate("/login"); // redirect to login if not logged in
-    }
-  });
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);  // automatically get userId from Firebase
+      } else {
+        navigate("/login"); // redirect to login if not logged in
+      }
+    });
 
-  return () => unsubscribe(); // cleanup listener on unmount
-}, [navigate]);
+    return () => unsubscribe(); // cleanup listener on unmount
+  }, [navigate]);
 
 
 
@@ -32,26 +32,26 @@ useEffect(() => {
 
 
   useEffect(() => {
-  if (!userId) return; // Don't fetch until userId is set
+    if (!userId) return; // Don't fetch until userId is set
 
-  const fetchData = async () => {
-    try {
-      const [menuRes, votesRes, userVoteRes] = await Promise.all([
-        axios.get("http://localhost:5000/auntys-cafe/menu"),
-        axios.get("http://localhost:5000/auntys-cafe/dish-votes"),
-        axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`)
-      ]);
+    const fetchData = async () => {
+      try {
+        const [menuRes, votesRes, userVoteRes] = await Promise.all([
+          axios.get("http://localhost:5000/auntys-cafe/menu"),
+          axios.get("http://localhost:5000/auntys-cafe/dish-votes"),
+          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`)
+        ]);
 
-      setMenu(menuRes.data.items || []);
-      setVotes(votesRes.data.votes || {});
-      setUserVotes(userVoteRes.data.votes || {});
-    } catch (err) {
-      console.error("Error fetching data", err);
-    }
-  };
+        setMenu(menuRes.data.items || []);
+        setVotes(votesRes.data.votes || {});
+        setUserVotes(userVoteRes.data.votes || {});
+      } catch (err) {
+        console.error("Error fetching data", err);
+      }
+    };
 
-  fetchData();
-}, [userId]);
+    fetchData();
+  }, [userId]);
 
 
   // ... [keep your existing handleVote and handleFeedback functions]
@@ -201,6 +201,13 @@ useEffect(() => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Today's Special Menu</h1>
+          <button
+            onClick={() => navigate("/analytics")}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
+           📊 View Stats
+          </button>
+
           <button
             onClick={() => navigate("/admin-login")}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
