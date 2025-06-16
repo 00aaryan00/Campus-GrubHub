@@ -29,6 +29,7 @@ function App() {
         <Route path="/admin/orders" element={<AdminOrders />} />
        <Route path="/my-orders" element={<UserOrderSummary />} />
        <Route path="/analytics" element={<VoteAnalytics />} />
+       <Route path="/menu" element={<AuntysCafePreOrder />} />
        
 
         

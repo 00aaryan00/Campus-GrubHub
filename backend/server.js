@@ -5,6 +5,7 @@ const cafeRoutes = require("./backedroutes");
 
 const app = express();
 app.use(cors());
+
 app.use(express.json());
 
 
@@ -23,43 +24,43 @@ let messMenu = {
   Monday: {
     breakfast: ["Aloo Paratha", "Butter", "Onion Flakes", "Chana Sprouts"],
     lunch: ["Aloo Cabbage", "Rajma", "Rice", "Dal Fry", "Butter Milk"],
-    snacks: ["Chowmein Samosa", "Tea/Coffee"],
-    dinner: ["Palak Corn", "Roti", "Rice", "Motichoor Laddu/Boondi"]
+    snacks: ["Chowmein Samosa", "Tea","Coffee"],
+    dinner: ["Palak Corn", "Roti", "Rice", "Motichoor Laddu"," Boondi"]
   },
   Tuesday: {
-    breakfast: ["Moong Chilla", "Chutney", "Daliya", "Moong Sprouts", "Guava/Banana"],
+    breakfast: ["Moong Chilla", "Chutney", "Daliya", "Moong Sprouts", "Guava" ,"Banana"],
     lunch: ["Aloo Matar", "Gravy Chana Masala", "Jeera Rice", "Achar", "Salad"],
-    snacks: ["Vada Pav", "Pickle", "Chilli + Red & Green Chutney", "Tea/Coffee"],
+    snacks: ["Vada Pav", "Pickle", "Chilli + Red & Green Chutney", "Tea","Coffee"],
     dinner: ["Chhola", "Puri", "Aloo Beans", "Rice", "Roti", "Lung Laddu"]
   },
   Wednesday: {
     breakfast: ["Mix Paratha", "Butter", "Chutney", "Corn Flakes", "Moong Sprouts"],
     lunch: ["Lauki Aloo", "Dry Soya Chunks", "Panchratan Dal", "Boondi Raita", "Chips"],
-    snacks: ["Pasta", "Tea/Coffee"],
+    snacks: ["Pasta", "Tea","Coffee"],
     dinner: ["Veg Paneer Kali Mirch Matar", "Jeera Rice", "Roti", "Arhar Dal", "Achar"]
   },
   Thursday: {
     breakfast: ["Uttapam", "Idli", "Sambhar", "Coconut Chutney", "Banana", "Chana Salted"],
     lunch: ["Kathol", "Methi Phulki", "Tomato Salad", "Rice", "Papad", "Dal Makhani", "Paratha"],
-    snacks: ["Aloo Corn Sandwich", "Tea/Coffee"],
+    snacks: ["Aloo Corn Sandwich", "Tea","Coffee"],
     dinner: ["Veg Kofta", "Paneer Bhurji", "Rice", "Roti", "Gulab Jamun"]
   },
   Friday: {
     breakfast: ["Paneer Paratha", "Butter", "Corn Flakes", "Chana"],
     lunch: ["Matar Mushroom Dry", "Kadi Pakoda", "Masoor Dal Fry", "Papad"],
-    snacks: ["Poha", "Tea/Coffee"],
+    snacks: ["Poha", "Tea","Coffee"],
     dinner: ["Veg Kadai Paneer", "Dal Fry", "Roti", "Rice", "Pickle"]
   },
   Saturday: {
     breakfast: ["Methi Puri", "Bhaji", "Aloo", "Namkeen", "Banana", "Chana Sprouts"],
     lunch: ["Aloo Ko Chokha Seasonal Veg", "Papad", "Kadhi", "Curd", "Rice", "French Fries"],
-    snacks: ["Pav Bhaji", "Tea/Coffee"],
+    snacks: ["Pav Bhaji", "Tea","Coffee"],
     dinner: ["Matar Paneer", "Roti", "Rice", "Boondi Raita", "Moong Dal"]
   },
   Sunday: {
-    breakfast: ["Masala Dosa", "Chutney", "Sambar", "Cornflakes", "Sprouts", "Bread", "Butter", "Jam"],
+    breakfast: ["Masala Dosa", "Chutney", "Sambhar", "Cornflakes", "Sprouts", "Bread", "Butter", "Jam"],
     lunch: ["Chole Bhature", "Jeera Aloo", "Dal", "Papad", "Dahi", "Achar"],
-    snacks: ["Aloo Tikki", "Sauce", "Tea/Coffee"],
+    snacks: ["Aloo Tikki", "Sauce", "Tea","Coffee"],
     dinner: ["Paneer Masala", "Dal Fry", "Rice", "Roti", "Lemon", "Onion", "Tomato"]
   }
 };
@@ -198,60 +199,47 @@ app.get("/menu", async (req, res) => {
 
 // Vote API — like/dislike any item (requires authentication)
 app.post("/vote", verifyToken, async (req, res) => {
-    console.log("Received vote payload:", req.body);
-
   const { item, type } = req.body;
   const userId = req.user.uid;
 
-  if (!["like", "dislike"].includes(type)) {
+  // Add validation for "neutral" type if needed
+  if (!["like", "dislike", "neutral"].includes(type)) {
     return res.status(400).json({ success: false, message: "Invalid vote type" });
   }
 
-  if (!item || typeof item !== "string" || item.trim() === "") {
-    return res.status(400).json({ success: false, message: "Invalid item" });
-  }
-
-
-
   try {
-    // Check if user already voted for this item
-    // const userVoteRef = db.collection('userVotes').doc(`${userId}_${item}`);
-
     const safeDishId = item.replace(/\//g, "_");
     const userVoteRef = db.collection('userVotes').doc(`${userId}_${safeDishId}`);
     const dishVoteRef = db.collection('dishVotes').doc(safeDishId);
 
-
-    const dishVoteDoc = await dishVoteRef.get();
-
-    const userVoteDoc = await userVoteRef.get();
-
-    // const dishVoteRef = db.collection('dishVotes').doc(item);
+    const [userVoteDoc, dishVoteDoc] = await Promise.all([
+      userVoteRef.get(),
+      dishVoteRef.get()
+    ]);
 
     if (!dishVoteDoc.exists) {
       return res.status(400).json({ success: false, message: "Item not found" });
     }
 
-    let currentVote = null;
-    if (userVoteDoc.exists) {
-      currentVote = userVoteDoc.data().voteType;
-    }
+    const currentVote = userVoteDoc.exists ? userVoteDoc.data().voteType : null;
+    let newVoteType = type;
 
-    // If user is voting the same type again, remove the vote
+    // If clicking same vote type again, remove vote (toggle off)
     if (currentVote === type) {
       await userVoteRef.delete();
       await dishVoteRef.update({
         [type]: admin.firestore.FieldValue.increment(-1)
       });
+      newVoteType = null; // Indicate vote removed
     }
-    // If user is changing vote type
-    else if (currentVote && currentVote !== type) {
+    // If changing vote type
+    else if (currentVote) {
       await userVoteRef.set({
         userId,
         item,
         voteType: type,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
+      }, { merge: true });
       await dishVoteRef.update({
         [currentVote]: admin.firestore.FieldValue.increment(-1),
         [type]: admin.firestore.FieldValue.increment(1)
@@ -270,14 +258,13 @@ app.post("/vote", verifyToken, async (req, res) => {
       });
     }
 
-    // Get updated vote counts
     const updatedDoc = await dishVoteRef.get();
     const updatedData = updatedDoc.data();
 
     res.json({
       success: true,
       updated: { like: updatedData.like, dislike: updatedData.dislike },
-      userVote: currentVote === type ? null : type
+      userVote: newVoteType === null ? null : type
     });
 
   } catch (error) {

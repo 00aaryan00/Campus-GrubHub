@@ -8,25 +8,14 @@ const fetchVoteData = async () => {
   try {
     const votesRef = collection(db, 'userVotes');
     const snapshot = await getDocs(votesRef);
-    const data = snapshot.docs.map(doc => {
-      const raw = doc.data();
-      console.log(`🧾 Vote:`, {
-        id: doc.id,
-        item: raw.item,
-        voteType: raw.voteType,
-        timestamp: raw.timestamp,
-        type: typeof raw.timestamp,
-        hasToDate: raw.timestamp?.toDate ? true : false,
-      });
-      return { id: doc.id, ...raw };
-    });
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('📊 Fetched vote data:', data);
     return data;
   } catch (error) {
     console.error('Error fetching vote data:', error);
     return [];
   }
 };
-
 
 const fetchMenuData = async () => {
   try {
@@ -63,17 +52,21 @@ const VoteAnalytics = () => {
         ]);
         
         setVoteData(votes);
-        setMenuData(menu);
         
-        // Set default selected date to the most recent menu date
-        if (menu.length > 0) {
-          const sortedMenu = menu
-  .filter(m => m.date && !isNaN(new Date(m.date)))
-  .sort((a, b) => new Date(b.date) - new Date(a.date));
-if (sortedMenu.length > 0) {
-  setSelectedDate(sortedMenu[0].date);
-}
-
+        // Filter and sort valid menu dates
+        const validMenus = menu.filter(m => {
+          try {
+            return m.date && !isNaN(new Date(m.date).getTime());
+          } catch {
+            return false;
+          }
+        }).sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        setMenuData(validMenus);
+        
+        // Set default selected date to the most recent valid date
+        if (validMenus.length > 0) {
+          setSelectedDate(validMenus[0].date);
         }
       } catch (err) {
         console.error('Error loading data:', err);
@@ -89,6 +82,7 @@ if (sortedMenu.length > 0) {
     const now = new Date();
     const startDate = new Date();
     
+    // Handle time range filter
     if (timeRange === 'week') {
       startDate.setDate(now.getDate() - 7);
     } else if (timeRange === 'month') {
@@ -96,24 +90,36 @@ if (sortedMenu.length > 0) {
     } else if (timeRange === 'year') {
       startDate.setFullYear(now.getFullYear() - 1);
     }
-    // For 'all', we don't filter by time
 
     return voteData.filter(vote => {
       // Handle timestamp conversion
       let voteDate;
       if (vote.timestamp?.toDate) {
-        // Firebase Timestamp
         voteDate = vote.timestamp.toDate();
       } else if (vote.timestamp) {
-        // Regular date string or Date object
         voteDate = new Date(vote.timestamp);
       } else {
-        // Skip votes without timestamp
         return false;
       }
 
+      // Handle date filter if selected
+      if (selectedDate) {
+        const selectedDateObj = new Date(selectedDate);
+        const voteDateStr = voteDate.toISOString().split('T')[0];
+        const selectedDateStr = selectedDateObj.toISOString().split('T')[0];
+        
+        if (voteDateStr !== selectedDateStr) {
+          return false;
+        }
+      }
+
+      // Handle time range filter
       const matchesTime = timeRange === 'all' || voteDate >= startDate;
-      const matchesFilter = filterType === 'all' || vote.voteType === filterType.replace('s', ''); // 'likes' -> 'like'
+      
+      // Handle vote type filter
+      const matchesFilter = filterType === 'all' || 
+                          (filterType === 'likes' && vote.voteType === 'like') || 
+                          (filterType === 'dislikes' && vote.voteType === 'dislike');
       
       return matchesTime && matchesFilter;
     });
@@ -133,10 +139,11 @@ if (sortedMenu.length > 0) {
       
       if (vote.voteType === 'like') {
         counts[itemName].likes++;
+        counts[itemName].total++;
       } else if (vote.voteType === 'dislike') {
         counts[itemName].dislikes++;
+        counts[itemName].total++;
       }
-      counts[itemName].total++;
     });
 
     return Object.entries(counts)
@@ -185,37 +192,56 @@ if (sortedMenu.length > 0) {
     return Object.values(dailyData).sort((a, b) => new Date(a.date) - new Date(b.date));
   };
 
- const formatDate = (dateValue) => {
-  try {
+  const formatDate = (dateValue) => {
     if (!dateValue) return 'Invalid Date';
+    
+    try {
+      let date;
+      
+      // Handle Firebase Timestamp objects
+      if (typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
+        date = dateValue.toDate();
+      } 
+      // Handle string dates
+      else if (typeof dateValue === 'string') {
+        // Handle ISO strings and other formats
+        if (dateValue.includes('T')) {
+          date = new Date(dateValue);
+        } else {
+          // Handle simple date strings (YYYY-MM-DD)
+          const parts = dateValue.split('-');
+          if (parts.length === 3) {
+            date = new Date(parts[0], parts[1] - 1, parts[2]);
+          } else {
+            date = new Date(dateValue);
+          }
+        }
+      }
+      // Handle Date objects
+      else if (dateValue instanceof Date) {
+        date = dateValue;
+      }
+      // Fallback for other cases
+      else {
+        date = new Date(dateValue);
+      }
 
-    let date;
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', dateValue);
+        return 'Invalid Date';
+      }
 
-    // Firestore Timestamp
-    if (typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
-      date = dateValue.toDate();
-    } else {
-      date = new Date(dateValue);
-    }
-
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date input:', dateValue);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Date formatting error:', error, 'Input:', dateValue);
       return 'Invalid Date';
     }
-
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  } catch (error) {
-    console.error('Date formatting error:', error, 'Input:', dateValue);
-    return 'Invalid Date';
-  }
-};
-
-
+  };
 
   const voteCounts = getVoteCountsByItem();
   const mostLiked = getMostLikedMeal();
@@ -272,12 +298,23 @@ if (sortedMenu.length > 0) {
               >
                 <option value="">Select a date</option>
                 {menuData
+                  .filter(menu => {
+                    try {
+                      return menu.date && !isNaN(new Date(menu.date).getTime());
+                    } catch {
+                      return false;
+                    }
+                  })
                   .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map((menu) => (
-                    <option key={menu.id || menu.date} value={menu.date}>
-                      {formatDate(menu.date)}
-                    </option>
-                  ))
+                  .map((menu) => {
+                    const dateStr = formatDate(menu.date);
+                    return dateStr !== 'Invalid Date' ? (
+                      <option key={menu.id || menu.date} value={menu.date}>
+                        {dateStr}
+                      </option>
+                    ) : null;
+                  })
+                  .filter(Boolean)
                 }
               </select>
             </div>
