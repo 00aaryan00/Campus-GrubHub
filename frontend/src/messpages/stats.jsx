@@ -8,14 +8,25 @@ const fetchVoteData = async () => {
   try {
     const votesRef = collection(db, 'userVotes');
     const snapshot = await getDocs(votesRef);
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log('📊 Fetched vote data:', data);
+    const data = snapshot.docs.map(doc => {
+      const raw = doc.data();
+      console.log(`🧾 Vote:`, {
+        id: doc.id,
+        item: raw.item,
+        voteType: raw.voteType,
+        timestamp: raw.timestamp,
+        type: typeof raw.timestamp,
+        hasToDate: raw.timestamp?.toDate ? true : false,
+      });
+      return { id: doc.id, ...raw };
+    });
     return data;
   } catch (error) {
     console.error('Error fetching vote data:', error);
     return [];
   }
 };
+
 
 const fetchMenuData = async () => {
   try {

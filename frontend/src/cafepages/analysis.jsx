@@ -75,17 +75,18 @@ const VoteAnalytics = () => {
       const allVotes = [];
       
       for (const itemDoc of cafeUserVotesSnapshot.docs) {
-        const itemName = itemDoc.id;
         const itemData = itemDoc.data();
+const comments = itemData.comments || [];
+//const itemName = comments[0]?.dishName || 'Unknown Dish';
+
         
-        console.log('User vote document:', itemName, itemData);
-        
+        console.log('User vote document:', itemDoc.id, itemData);
         // Handle different possible data structures
         if (itemData.timestamp && itemData.type && itemData.userName) {
           // Single vote stored directly in document
           allVotes.push({
             id: itemDoc.id,
-            item: itemName,
+             item: itemDoc.id,
             type: itemData.type,
             timestamp: itemData.timestamp.toDate ? itemData.timestamp.toDate() : new Date(itemData.timestamp),
             userName: itemData.userName
@@ -93,18 +94,20 @@ const VoteAnalytics = () => {
         } else {
           // If votes are stored as subcollections or arrays, handle them here
           // This is a fallback structure - adjust based on your actual data structure
-          Object.keys(itemData).forEach(key => {
-            const voteData = itemData[key];
-            if (voteData && typeof voteData === 'object' && voteData.type && voteData.timestamp) {
-              allVotes.push({
-                id: `${itemName}_${key}`,
-                item: itemName,
-                type: voteData.type,
-                timestamp: voteData.timestamp.toDate ? voteData.timestamp.toDate() : new Date(voteData.timestamp),
-                userName: voteData.userName || 'Unknown'
-              });
-            }
-          });
+          // Loop through each vote key (dish ID) in the user vote document
+Object.keys(itemData).forEach(key => {
+  const voteData = itemData[key];
+  if (voteData && typeof voteData === 'object' && voteData.type && voteData.timestamp) {
+    allVotes.push({
+      id: `${itemDoc.id}_${key}`,
+      item: key, // Use the key itself as the dish name
+      type: voteData.type,
+      timestamp: voteData.timestamp.toDate ? voteData.timestamp.toDate() : new Date(voteData.timestamp),
+      userName: voteData.userName || 'Unknown'
+    });
+  }
+});
+
         }
       }
 
