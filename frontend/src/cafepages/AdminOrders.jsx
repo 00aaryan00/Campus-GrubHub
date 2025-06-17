@@ -1,11 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
   const [editingPickupTime, setEditingPickupTime] = useState({});
   const [editingNotes, setEditingNotes] = useState({});
+
+  // Setup real-time notifications for admin
+  const { showToast } = useRealtimeNotifications(
+    true, // enableOrderNotifications
+    null, // userEmail (null for admin)
+    true  // isAdmin
+  );
 
   const fetchOrders = async () => {
     try {
@@ -18,6 +26,7 @@ const AdminOrders = () => {
       setOrders(items);
     } catch (error) {
       console.error("Error fetching orders:", error);
+      showToast("Error fetching orders", 'error');
     }
   };
 
@@ -28,11 +37,21 @@ const AdminOrders = () => {
   const updateStatus = async (orderId, newStatus) => {
     try {
       await updateDoc(doc(db, 'preOrders', orderId), {
-        status: newStatus
+        status: newStatus,
+        statusUpdatedAt: new Date() // Track when status was updated
       });
+      
+      // Show immediate feedback to admin
+      const order = orders.find(o => o.id === orderId);
+      showToast(
+        `Order ${order?.itemName} marked as ${newStatus}`,
+        newStatus === 'Rejected' ? 'error' : 'success'
+      );
+      
       fetchOrders();
     } catch (error) {
       console.error("Error updating status:", error);
+      showToast("Error updating order status", 'error');
     }
   };
 
@@ -42,12 +61,21 @@ const AdminOrders = () => {
 
     try {
       await updateDoc(doc(db, 'preOrders', orderId), {
-        pickupTime: newTime
+        pickupTime: newTime,
+        pickupTimeSetAt: new Date() // Track when pickup time was set
       });
+      
+      const order = orders.find(o => o.id === orderId);
+      showToast(
+        `Pickup time set for ${order?.itemName}: ${newTime}`,
+        'success'
+      );
+      
       setEditingPickupTime(prev => ({ ...prev, [orderId]: '' }));
       fetchOrders();
     } catch (error) {
       console.error("Error updating pickup time:", error);
+      showToast("Error updating pickup time", 'error');
     }
   };
 
@@ -56,23 +84,60 @@ const AdminOrders = () => {
     
     try {
       await updateDoc(doc(db, 'preOrders', orderId), {
-        adminNotes: notes || ''
+        adminNotes: notes || '',
+        notesUpdatedAt: new Date() // Track when notes were updated
       });
+      
+      const order = orders.find(o => o.id === orderId);
+      showToast(
+        `Notes ${notes ? 'updated' : 'cleared'} for ${order?.itemName}`,
+        'success'
+      );
+      
       setEditingNotes(prev => ({ ...prev, [orderId]: '' }));
       fetchOrders();
     } catch (error) {
       console.error("Error updating notes:", error);
+      showToast("Error updating admin notes", 'error');
     }
+  };
+
+  // Quick action buttons for common status updates
+  const quickUpdateStatus = async (orderId, newStatus) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Show confirmation for rejection
+    if (newStatus === 'Rejected') {
+      const confirmed = window.confirm(
+        `Are you sure you want to reject the order for ${order.itemName}? This will notify the customer.`
+      );
+      if (!confirmed) return;
+    }
+
+    // For "Ready" status, prompt for pickup time if not set
+    if (newStatus === 'Ready' && !order.pickupTime) {
+      const shouldSetTime = window.confirm(
+        `This order doesn't have a pickup time set. Would you like to set one now? (Recommended for better customer experience)`
+      );
+      if (shouldSetTime) {
+        setEditingPickupTime(prev => ({ ...prev, [orderId]: '' }));
+        showToast("Please set a pickup time below before marking as ready", 'warning');
+        return;
+      }
+    }
+
+    await updateStatus(orderId, newStatus);
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Accepted': return 'bg-blue-100 text-blue-800';
-      case 'Ready': return 'bg-green-100 text-green-800';
-      case 'Collected': return 'bg-gray-100 text-gray-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'Accepted': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'Ready': return 'bg-green-100 text-green-800 border-green-200';
+      case 'Collected': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'Rejected': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -82,27 +147,46 @@ const AdminOrders = () => {
     return date.toLocaleString();
   };
 
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'Pending': return '⏳';
+      case 'Accepted': return '✅';
+      case 'Ready': return '🍽️';
+      case 'Collected': return '✨';
+      case 'Rejected': return '❌';
+      default: return '📋';
+    }
+  };
+
   return (
     <div className="p-4 max-w-6xl mx-auto">
-      <h2 className="text-3xl font-bold mb-6">Admin - Pre-Orders</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold">Admin - Pre-Orders</h2>
+        <div className="text-sm text-gray-500">
+          🔔 Real-time notifications enabled
+        </div>
+      </div>
 
       {orders.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-gray-500 text-lg">No orders found.</p>
+          <p className="text-gray-400 text-sm mt-2">New orders will appear here automatically</p>
         </div>
       ) : (
         <div className="space-y-6">
           {orders.map(order => (
-            <div key={order.id} className="border rounded-lg shadow-sm bg-white overflow-hidden">
+            <div key={order.id} className="border rounded-lg shadow-sm bg-white overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="text-xl font-semibold text-gray-900">{order.itemName}</h3>
-                    <p className="text-gray-600">₹{order.price}</p>
+                    <p className="text-gray-600 text-lg">₹{order.price}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-                    {order.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
+                      {getStatusIcon(order.status)} {order.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4 mb-4">
@@ -119,9 +203,30 @@ const AdminOrders = () => {
                   </div>
                 </div>
 
-                {/* Pickup Time Section - FIXED */}
+                {/* Quick Actions for Pending Orders */}
+                {order.status === 'Pending' && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm font-medium text-yellow-800 mb-2">⚡ Quick Actions:</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => quickUpdateStatus(order.id, 'Accepted')}
+                        className="px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
+                      >
+                        ✅ Accept Order
+                      </button>
+                      <button
+                        onClick={() => quickUpdateStatus(order.id, 'Rejected')}
+                        className="px-4 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition-colors"
+                      >
+                        ❌ Reject Order
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pickup Time Section */}
                 <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Pickup Time:</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">⏰ Pickup Time:</p>
                   {order.pickupTime ? (
                     <div className="flex items-center gap-2">
                       <span className="text-green-600 font-medium">✓ {order.pickupTime}</span>
@@ -168,7 +273,7 @@ const AdminOrders = () => {
                         <button
                           onClick={() => updatePickupTime(order.id)}
                           disabled={!editingPickupTime[order.id]}
-                          className="px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          className="px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                         >
                           Set Time
                         </button>
@@ -178,7 +283,7 @@ const AdminOrders = () => {
                             delete newState[order.id];
                             return newState;
                           })}
-                          className="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                          className="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
                         >
                           Cancel
                         </button>
@@ -189,7 +294,7 @@ const AdminOrders = () => {
 
                 {/* Admin Notes Section */}
                 <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Admin Notes:</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">📝 Admin Notes:</p>
                   {order.adminNotes ? (
                     <div className="flex items-start gap-2">
                       <p className="text-gray-900 flex-1">{order.adminNotes}</p>
@@ -208,7 +313,7 @@ const AdminOrders = () => {
                       onClick={() => setEditingNotes(prev => ({ ...prev, [order.id]: '' }))}
                       className="text-blue-500 hover:text-blue-700 text-sm underline"
                     >
-                      + Add notes
+                      + Add notes for customer
                     </button>
                   )}
                   
@@ -220,14 +325,14 @@ const AdminOrders = () => {
                           ...prev, 
                           [order.id]: e.target.value 
                         }))}
-                        placeholder="Add notes for customer..."
+                        placeholder="Add notes for customer (e.g., special instructions, modifications, etc.)"
                         className="w-full border rounded px-3 py-2 text-sm"
                         rows="3"
                       />
                       <div className="flex gap-2 mt-2">
                         <button
                           onClick={() => updateAdminNotes(order.id)}
-                          className="px-4 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                          className="px-4 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors"
                         >
                           Save Notes
                         </button>
@@ -237,7 +342,7 @@ const AdminOrders = () => {
                             delete newState[order.id];
                             return newState;
                           })}
-                          className="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                          className="px-4 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
                         >
                           Cancel
                         </button>
@@ -260,10 +365,11 @@ const AdminOrders = () => {
                           ? "bg-gray-600 hover:bg-gray-700 text-white"
                           : "bg-blue-500 hover:bg-blue-600 text-white"
                       }`}
-                      onClick={() => updateStatus(order.id, status)}
+                      onClick={() => quickUpdateStatus(order.id, status)}
                       disabled={status === order.status}
+                      title={status === order.status ? `Already ${status}` : `Mark as ${status}`}
                     >
-                      Mark as {status}
+                      {getStatusIcon(status)} Mark as {status}
                     </button>
                   ))}
                 </div>

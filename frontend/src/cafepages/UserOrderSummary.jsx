@@ -1,13 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../firebase';
+import { NotificationManager } from '../utils/notifications';
+import { useOrderNotifications } from '../hooks/useRealtimeNotifications';
 
 const UserOrderSummary = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true); // Add this state
+  const [authLoading, setAuthLoading] = useState(true);
+  const [previousOrders, setPreviousOrders] = useState([]);
+
+  // Use the order notifications hook
+  const { notifyOrderStatusChange, notifyOrderUpdate } = useOrderNotifications();
+
+  useEffect(() => {
+    const initializeComponent = async () => {
+      // Request notification permission when component mounts
+      try {
+        const permissionGranted = await NotificationManager.requestPermission();
+        if (permissionGranted) {
+          console.log('Notification permissions granted for order updates');
+          NotificationManager.showToast('Notifications enabled for order updates', 'success');
+        } else {
+          console.log('Notification permissions denied');
+          NotificationManager.showToast('Enable notifications to get order updates', 'warning');
+        }
+      } catch (error) {
+        console.error('Error requesting notification permission:', error);
+      }
+    };
+
+    initializeComponent();
+  }, []);
 
   useEffect(() => {
     const auth = getAuth();
@@ -15,28 +41,148 @@ const UserOrderSummary = () => {
     // Listen for authentication state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setAuthLoading(false); // Auth state is now determined
+      setAuthLoading(false);
       
       if (currentUser) {
-        fetchUserOrders(currentUser.email);
+        setupRealtimeOrderUpdates(currentUser.email);
       } else {
         setLoading(false);
       }
     });
 
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
 
-  const fetchUserOrders = async (userEmail) => {
+  const setupRealtimeOrderUpdates = (userEmail) => {
     try {
-      console.log("Fetching orders for email:", userEmail); // Debug log
+      console.log("Setting up real-time order updates for:", userEmail);
       
-      // Try simple query first
       const q = query(
         collection(db, 'preOrders'),
-        where('userEmail', '==', userEmail)
-        // Temporarily removed orderBy to test
+        where('userEmail', '==', userEmail),
+        orderBy('orderTime', 'desc')
+      );
+
+      // Set up real-time listener
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const userOrders = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        console.log("Real-time order update:", userOrders);
+        
+        // Detect status changes and new orders
+        if (previousOrders.length > 0) {
+          detectOrderChanges(userOrders, previousOrders);
+        }
+        
+        setOrders(userOrders);
+        setPreviousOrders(userOrders);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error in real-time listener:", error);
+        // Fallback to one-time fetch
+        fetchUserOrders(userEmail);
+      });
+
+      // Cleanup listener on unmount
+      return () => unsubscribe();
+    } catch (error) {
+      console.error("Error setting up real-time updates:", error);
+      // Fallback to one-time fetch
+      fetchUserOrders(userEmail);
+    }
+  };
+
+  const detectOrderChanges = (currentOrders, previousOrders) => {
+    const previousOrdersMap = new Map(previousOrders.map(order => [order.id, order]));
+    
+    currentOrders.forEach(currentOrder => {
+      const previousOrder = previousOrdersMap.get(currentOrder.id);
+      
+      if (!previousOrder) {
+        // New order (shouldn't happen in user view, but handle it)
+        console.log("New order detected:", currentOrder);
+        return;
+      }
+      
+      // Check for status changes
+      if (previousOrder.status !== currentOrder.status) {
+        console.log(`Status changed for ${currentOrder.itemName}: ${previousOrder.status} -> ${currentOrder.status}`);
+        
+        // Show notification for status change
+        notifyOrderStatusChange(
+          currentOrder.itemName,
+          currentOrder.status,
+          previousOrder.status
+        );
+        
+        // Show toast notification
+        NotificationManager.showToast(
+          `Order ${currentOrder.itemName} is now ${currentOrder.status}`,
+          getToastType(currentOrder.status)
+        );
+      }
+      
+      // Check for pickup time assignment
+      if (!previousOrder.pickupTime && currentOrder.pickupTime) {
+        console.log(`Pickup time assigned for ${currentOrder.itemName}: ${currentOrder.pickupTime}`);
+        
+        NotificationManager.showNotification(
+          `🕐 Pickup Time Assigned: ${currentOrder.itemName}`,
+          {
+            body: `Your order is ready for pickup at ${currentOrder.pickupTime}`,
+            tag: `pickup-time-${currentOrder.id}`,
+            requireInteraction: true
+          }
+        );
+        
+        NotificationManager.showToast(
+          `Pickup time set for ${currentOrder.itemName}: ${currentOrder.pickupTime}`,
+          'info'
+        );
+      }
+      
+      // Check for admin notes
+      if (!previousOrder.adminNotes && currentOrder.adminNotes) {
+        console.log(`Admin notes added for ${currentOrder.itemName}`);
+        
+        NotificationManager.showNotification(
+          `📝 Message from Admin: ${currentOrder.itemName}`,
+          {
+            body: currentOrder.adminNotes,
+            tag: `admin-notes-${currentOrder.id}`,
+            requireInteraction: true
+          }
+        );
+        
+        NotificationManager.showToast(
+          `Admin added notes for ${currentOrder.itemName}`,
+          'info'
+        );
+      }
+    });
+  };
+
+  const getToastType = (status) => {
+    switch (status) {
+      case 'Accepted': return 'success';
+      case 'Ready': return 'success';
+      case 'Collected': return 'success';
+      case 'Rejected': return 'error';
+      default: return 'info';
+    }
+  };
+
+  const fetchUserOrders = async (userEmail) => {
+    try {
+      console.log("Fetching orders for email:", userEmail);
+      
+      const q = query(
+        collection(db, 'preOrders'),
+        where('userEmail', '==', userEmail),
+        orderBy('orderTime', 'desc')
       );
       const querySnapshot = await getDocs(q);
       const userOrders = querySnapshot.docs.map(doc => ({
@@ -44,12 +190,13 @@ const UserOrderSummary = () => {
         ...doc.data()
       }));
       
-      console.log("Found orders:", userOrders); // Debug log
+      console.log("Found orders:", userOrders);
       setOrders(userOrders);
+      setPreviousOrders(userOrders);
     } catch (error) {
       console.error("Error fetching user orders:", error);
       
-      // If orderBy fails, try without it
+      // Fallback query without orderBy
       try {
         console.log("Retrying without orderBy...");
         const fallbackQuery = query(
@@ -63,12 +210,26 @@ const UserOrderSummary = () => {
         }));
         console.log("Fallback orders found:", fallbackOrders);
         setOrders(fallbackOrders);
+        setPreviousOrders(fallbackOrders);
       } catch (fallbackError) {
         console.error("Fallback query also failed:", fallbackError);
+        NotificationManager.showToast("Error loading orders", "error");
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Test notification function
+  const testNotifications = () => {
+    NotificationManager.showNotification(
+      "🧪 Test Order Notification",
+      {
+        body: "This is a test notification for order updates!",
+        requireInteraction: false
+      }
+    );
+    NotificationManager.showToast("Test notification sent!", "info");
   };
 
   const getStatusIcon = (status) => {
@@ -130,6 +291,7 @@ const UserOrderSummary = () => {
           <div className="h-4 bg-gray-300 rounded w-1/4 mx-auto mb-4"></div>
           <div className="h-32 bg-gray-300 rounded mb-4"></div>
         </div>
+        <p className="text-gray-600 mt-2">Loading your orders...</p>
       </div>
     );
   }
@@ -148,7 +310,20 @@ const UserOrderSummary = () => {
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">My Orders</h2>
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-3xl font-bold text-gray-900">My Orders</h2>
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-gray-500 flex items-center gap-1">
+              🔔 <span>Real-time updates enabled</span>
+            </div>
+            <button 
+              onClick={testNotifications}
+              className="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+            >
+              Test Notifications
+            </button>
+          </div>
+        </div>
         <p className="text-gray-600">Track your pre-orders from Aunty's Café</p>
         <p className="text-sm text-gray-500">Welcome, {user.displayName || user.email}!</p>
       </div>
@@ -160,7 +335,7 @@ const UserOrderSummary = () => {
             <h3 className="text-xl font-semibold text-gray-700 mb-2">No Orders Yet</h3>
             <p className="text-gray-500 mb-4">You haven't placed any pre-orders yet.</p>
             <button
-              onClick={() => window.location.href = '/menu'} // Adjust route as needed
+              onClick={() => window.location.href = '/menu'}
               className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
             >
               Browse Menu
@@ -261,6 +436,17 @@ const UserOrderSummary = () => {
           ))}
         </div>
       )}
+
+      {/* Debug section */}
+      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+        <h4 className="font-semibold text-gray-700 mb-2">Debug Info:</h4>
+        <div className="text-sm text-gray-600 space-y-1">
+          <p><strong>Total orders:</strong> {orders.length}</p>
+          <p><strong>User email:</strong> {user?.email}</p>
+          <p><strong>Notifications:</strong> {Notification.permission}</p>
+          <p><strong>Real-time updates:</strong> Active</p>
+        </div>
+      </div>
     </div>
   );
 };
