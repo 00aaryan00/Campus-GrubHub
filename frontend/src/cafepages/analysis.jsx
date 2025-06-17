@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer
 } from 'recharts';
-import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw, Search } from 'lucide-react';
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
@@ -30,6 +30,7 @@ const VoteAnalytics = () => {
   const [timeRange, setTimeRange] = useState('week');
   const [filterType, setFilterType] = useState('all');
   const [showDebug, setShowDebug] = useState(false);
+const [searchTerm, setSearchTerm] = useState('');
 
   // State for Firebase data
   const [voteData, setVoteData] = useState([]);
@@ -475,46 +476,63 @@ const VoteAnalytics = () => {
 
         {/* Aggregated Dish Statistics */}
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <h3 className="text-xl font-semibold mb-4">Aggregated Dish Statistics</h3>
-          {dishVoteData.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {dishVoteData
-                .sort((a, b) => (b.likes + b.dislikes) - (a.likes + a.dislikes))
-                .map((dish) => (
-                <div key={dish.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
-                  <h4 className="font-semibold text-lg mb-3">{dish.item}</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-green-600">👍 Likes:</span>
-                      <span className="font-semibold">{dish.likes}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-red-600">👎 Dislikes:</span>
-                      <span className="font-semibold">{dish.dislikes}</span>
-                    </div>
-                    <div className="flex justify-between border-t pt-2">
-                      <span className="text-gray-600">📊 Total:</span>
-                      <span className="font-semibold">{dish.likes + dish.dislikes}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-purple-600">📈 Like Rate:</span>
-                      <span className="font-semibold">
-                        {dish.likes + dish.dislikes > 0 
-                          ? ((dish.likes / (dish.likes + dish.dislikes)) * 100).toFixed(1)
-                          : 0}%
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Last Updated: {dish.lastUpdated.toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">No aggregated dish data available</p>
-          )}
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-xl font-semibold">Aggregated Dish Statistics</h3>
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-gray-400" />
         </div>
+        <input
+          type="text"
+          placeholder="Search dishes..."
+          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+    </div>
+    {dishVoteData.length > 0 ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {dishVoteData
+          .filter(dish => 
+            dish.item.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+          .sort((a, b) => (b.likes + b.dislikes) - (a.likes + a.dislikes))
+          .map((dish) => (
+          <div key={dish.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+            <h4 className="font-semibold text-lg mb-3">{dish.item}</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-green-600">👍 Likes:</span>
+                <span className="font-semibold">{dish.likes}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-red-600">👎 Dislikes:</span>
+                <span className="font-semibold">{dish.dislikes}</span>
+              </div>
+              <div className="flex justify-between border-t pt-2">
+                <span className="text-gray-600">📊 Total:</span>
+                <span className="font-semibold">{dish.likes + dish.dislikes}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-purple-600">📈 Like Rate:</span>
+                <span className="font-semibold">
+                  {dish.likes + dish.dislikes > 0 
+                    ? ((dish.likes / (dish.likes + dish.dislikes)) * 100).toFixed(1)
+                    : 0}%
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                Last Updated: {dish.lastUpdated.toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <p className="text-gray-500 text-center py-8">No aggregated dish data available</p>
+    )}
+  </div>
 
         {/* All Cafe Items Overview */}
         <div className="bg-white p-6 rounded-lg shadow">
