@@ -24,7 +24,7 @@ let messMenu = {
   Monday: {
     breakfast: ["Aloo Paratha", "Butter", "Onion Flakes", "Chana Sprouts"],
     lunch: ["Aloo Cabbage", "Rajma", "Rice", "Dal Fry", "Butter Milk"],
-    snacks: ["Chowmein Samosa", "Tea","Coffee"],
+    snacks: ["Chowmein","Samosa", "Tea","Coffee"],
     dinner: ["Palak Corn", "Roti", "Rice", "Motichoor Laddu"," Boondi"]
   },
   Tuesday: {

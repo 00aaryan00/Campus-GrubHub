@@ -235,12 +235,12 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {/* Debug info for development */}
-            {item.name && (
+             {/* Debug info for development  */}
+            {/* {item.name && (
               <div style={{ fontSize: "12px", color: "#666", marginTop: "5px" }}>
                 Normalized ID: {item.name.trim().toLowerCase().replace(/\s+/g, "_").replace(/\//g, "_")}
               </div>
-            )}
+            )} */}
           </div>
         ))
       }

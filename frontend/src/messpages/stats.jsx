@@ -32,8 +32,12 @@ const fetchMenuData = async () => {
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
 
+const DAYS_OF_WEEK = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+];
+
 const VoteAnalytics = () => {
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
   const [timeRange, setTimeRange] = useState('week');
   const [filterType, setFilterType] = useState('all');
   const [voteData, setVoteData] = useState([]);
@@ -52,22 +56,12 @@ const VoteAnalytics = () => {
         ]);
         
         setVoteData(votes);
+        setMenuData(menu);
         
-        // Filter and sort valid menu dates
-        const validMenus = menu.filter(m => {
-          try {
-            return m.date && !isNaN(new Date(m.date).getTime());
-          } catch {
-            return false;
-          }
-        }).sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        setMenuData(validMenus);
-        
-        // Set default selected date to the most recent valid date
-        if (validMenus.length > 0) {
-          setSelectedDate(validMenus[0].date);
-        }
+        // Set default selected day to today
+        const today = new Date();
+        const todayDay = DAYS_OF_WEEK[today.getDay()];
+        setSelectedDay(todayDay);
       } catch (err) {
         console.error('Error loading data:', err);
         setError('Failed to load data. Please check your Firebase configuration.');
@@ -77,6 +71,19 @@ const VoteAnalytics = () => {
     };
     loadData();
   }, []);
+
+  // Helper function to get day of week from timestamp
+  const getDayFromTimestamp = (timestamp) => {
+    let date;
+    if (timestamp?.toDate) {
+      date = timestamp.toDate();
+    } else if (timestamp) {
+      date = new Date(timestamp);
+    } else {
+      return null;
+    }
+    return DAYS_OF_WEEK[date.getDay()];
+  };
 
   const getFilteredData = () => {
     const now = new Date();
@@ -102,13 +109,10 @@ const VoteAnalytics = () => {
         return false;
       }
 
-      // Handle date filter if selected
-      if (selectedDate) {
-        const selectedDateObj = new Date(selectedDate);
-        const voteDateStr = voteDate.toISOString().split('T')[0];
-        const selectedDateStr = selectedDateObj.toISOString().split('T')[0];
-        
-        if (voteDateStr !== selectedDateStr) {
+      // Handle day filter if selected
+      if (selectedDay) {
+        const voteDay = getDayFromTimestamp(vote.timestamp);
+        if (voteDay !== selectedDay) {
           return false;
         }
       }
@@ -192,63 +196,89 @@ const VoteAnalytics = () => {
     return Object.values(dailyData).sort((a, b) => new Date(a.date) - new Date(b.date));
   };
 
-  const formatDate = (dateValue) => {
-    if (!dateValue) return 'Invalid Date';
+  // Get available days that have votes
+  const getAvailableDays = () => {
+    const daysWithVotes = new Set();
+    voteData.forEach(vote => {
+      const day = getDayFromTimestamp(vote.timestamp);
+      if (day) {
+        daysWithVotes.add(day);
+      }
+    });
     
-    try {
-      let date;
-      
-      // Handle Firebase Timestamp objects
-      if (typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
-        date = dateValue.toDate();
-      } 
-      // Handle string dates
-      else if (typeof dateValue === 'string') {
-        // Handle ISO strings and other formats
-        if (dateValue.includes('T')) {
-          date = new Date(dateValue);
-        } else {
-          // Handle simple date strings (YYYY-MM-DD)
-          const parts = dateValue.split('-');
-          if (parts.length === 3) {
-            date = new Date(parts[0], parts[1] - 1, parts[2]);
-          } else {
-            date = new Date(dateValue);
-          }
-        }
-      }
-      // Handle Date objects
-      else if (dateValue instanceof Date) {
-        date = dateValue;
-      }
-      // Fallback for other cases
-      else {
-        date = new Date(dateValue);
-      }
-
-      if (isNaN(date.getTime())) {
-        console.warn('Invalid date:', dateValue);
-        return 'Invalid Date';
-      }
-
-      return date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    } catch (error) {
-      console.error('Date formatting error:', error, 'Input:', dateValue);
-      return 'Invalid Date';
-    }
+    // Return days in order, but only show days that have votes
+    return DAYS_OF_WEEK.filter(day => daysWithVotes.has(day));
   };
 
+  // Get menu items for selected day
+  const getMenuForDay = (day) => {
+  if (!day) return [];
+  
+  // Find the weekly menu document
+  const weeklyMenu = menuData.find(menu => menu.id === 'weekly' || menu.weekly);
+  
+  if (weeklyMenu) {
+    // Check for day-specific data in the weekly document
+    const dayLower = day.toLowerCase();
+    
+    // Look for the day as a field in the weekly document
+    if (weeklyMenu[dayLower]) {
+      // If it's an object with breakfast/dinner, extract all items
+      if (typeof weeklyMenu[dayLower] === 'object' && !Array.isArray(weeklyMenu[dayLower])) {
+        let allItems = [];
+        Object.keys(weeklyMenu[dayLower]).forEach(mealType => {
+          const mealItems = weeklyMenu[dayLower][mealType];
+          if (Array.isArray(mealItems)) {
+            allItems = [...allItems, ...mealItems];
+          }
+        });
+        return allItems.filter(item => item && item.trim() !== '');
+      }
+      // If it's already an array, return it directly
+      else if (Array.isArray(weeklyMenu[dayLower])) {
+        return weeklyMenu[dayLower].filter(item => item && item.trim() !== '');
+      }
+    }
+    
+    // Also check for capitalized day names
+    if (weeklyMenu[day]) {
+      if (typeof weeklyMenu[day] === 'object' && !Array.isArray(weeklyMenu[day])) {
+        let allItems = [];
+        Object.keys(weeklyMenu[day]).forEach(mealType => {
+          const mealItems = weeklyMenu[day][mealType];
+          if (Array.isArray(mealItems)) {
+            allItems = [...allItems, ...mealItems];
+          }
+        });
+        return allItems.filter(item => item && item.trim() !== '');
+      }
+      else if (Array.isArray(weeklyMenu[day])) {
+        return weeklyMenu[day].filter(item => item && item.trim() !== '');
+      }
+    }
+  }
+  
+  // Also check if there's a direct document for the day
+  const dayMenu = menuData.find(menu => 
+    menu.id === dayLower || 
+    (menu.day && menu.day.toLowerCase() === dayLower)
+  );
+  
+  if (dayMenu && dayMenu.items) {
+    return Array.isArray(dayMenu.items) ? 
+      dayMenu.items.filter(item => item && item.trim() !== '') : [];
+  }
+  
+  return [];
+};
   const voteCounts = getVoteCountsByItem();
   const mostLiked = getMostLikedMeal();
   const dailyTrends = getDailyTrends();
   const totalVotes = getFilteredData().length;
   const totalLikes = getFilteredData().filter(v => v.voteType === 'like').length;
   const totalDislikes = getFilteredData().filter(v => v.voteType === 'dislike').length;
+  const availableDays = getAvailableDays();
+  const menuItems = getMenuForDay(selectedDay);
 
   if (loading) {
     return (
@@ -292,30 +322,16 @@ const VoteAnalytics = () => {
             <div className="flex items-center gap-2">
               <Calendar className="text-blue-600" size={20} />
               <select 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={selectedDay} 
+                onChange={(e) => setSelectedDay(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
               >
-                <option value="">Select a date</option>
-                {menuData
-                  .filter(menu => {
-                    try {
-                      return menu.date && !isNaN(new Date(menu.date).getTime());
-                    } catch {
-                      return false;
-                    }
-                  })
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map((menu) => {
-                    const dateStr = formatDate(menu.date);
-                    return dateStr !== 'Invalid Date' ? (
-                      <option key={menu.id || menu.date} value={menu.date}>
-                        {dateStr}
-                      </option>
-                    ) : null;
-                  })
-                  .filter(Boolean)
-                }
+                <option value="">Select a day</option>
+                {availableDays.map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -498,17 +514,17 @@ const VoteAnalytics = () => {
         {/* Menu Section */}
         <div className="bg-white rounded-xl shadow-lg p-6">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">
-            Menu for {selectedDate ? formatDate(selectedDate) : 'No date selected'}
+            Menu for {selectedDay || 'No day selected'}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {selectedDate && menuData.find(menu => menu.date === selectedDate)?.items ? (
-              menuData.find(menu => menu.date === selectedDate).items
+            {selectedDay && menuItems.length > 0 ? (
+              menuItems
                 .filter(item => item && item.trim() !== '')
                 .map((item, index) => {
                   const itemVotes = voteCounts.find(v => v.item.toLowerCase() === item.toLowerCase());
                   return (
                     <div
-                      key={`${selectedDate}-${item}-${index}`}
+                      key={`${selectedDay}-${item}-${index}`}
                       className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                     >
                       <h4 className="font-semibold text-gray-800 mb-2">{item}</h4>
@@ -528,11 +544,11 @@ const VoteAnalytics = () => {
                 })
             ) : (
               <div className="col-span-full text-center py-8 text-gray-500">
-                {!selectedDate 
-                  ? "Please select a date to view the menu" 
+                {!selectedDay 
+                  ? "Please select a day to view the menu" 
                   : menuData.length === 0 
                     ? "Loading menu data..." 
-                    : "No menu items available for this date"
+                    : "No menu items available for this day"
                 }
               </div>
             )}

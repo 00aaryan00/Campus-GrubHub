@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer
 } from 'recharts';
-import { Calendar, TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw } from 'lucide-react';
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
@@ -27,7 +27,6 @@ const db = getFirestore(app);
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
 
 const VoteAnalytics = () => {
-  const [selectedDate, setSelectedDate] = useState('');
   const [timeRange, setTimeRange] = useState('week');
   const [filterType, setFilterType] = useState('all');
   const [showDebug, setShowDebug] = useState(false);
@@ -35,7 +34,6 @@ const VoteAnalytics = () => {
   // State for Firebase data
   const [voteData, setVoteData] = useState([]);
   const [dishVoteData, setDishVoteData] = useState([]);
-  const [menuData, setMenuData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -76,82 +74,43 @@ const VoteAnalytics = () => {
       
       for (const itemDoc of cafeUserVotesSnapshot.docs) {
         const itemData = itemDoc.data();
-const comments = itemData.comments || [];
-//const itemName = comments[0]?.dishName || 'Unknown Dish';
-
         
         console.log('User vote document:', itemDoc.id, itemData);
+        
         // Handle different possible data structures
         if (itemData.timestamp && itemData.type && itemData.userName) {
           // Single vote stored directly in document
           allVotes.push({
             id: itemDoc.id,
-             item: itemDoc.id,
+            item: itemDoc.id,
             type: itemData.type,
             timestamp: itemData.timestamp.toDate ? itemData.timestamp.toDate() : new Date(itemData.timestamp),
             userName: itemData.userName
           });
         } else {
-          // If votes are stored as subcollections or arrays, handle them here
-          // This is a fallback structure - adjust based on your actual data structure
           // Loop through each vote key (dish ID) in the user vote document
-Object.keys(itemData).forEach(key => {
-  const voteData = itemData[key];
-  if (voteData && typeof voteData === 'object' && voteData.type && voteData.timestamp) {
-    allVotes.push({
-      id: `${itemDoc.id}_${key}`,
-      item: key, // Use the key itself as the dish name
-      type: voteData.type,
-      timestamp: voteData.timestamp.toDate ? voteData.timestamp.toDate() : new Date(voteData.timestamp),
-      userName: voteData.userName || 'Unknown'
-    });
-  }
-});
-
-        }
-      }
-
-      // Try to fetch menu data (create empty array if collection doesn't exist)
-      let menuItems = [];
-      try {
-        const menuRef = collection(db, 'menu');
-        const menuSnapshot = await getDocs(menuRef);
-        menuItems = menuSnapshot.docs.map(doc => ({
-          id: doc.id,
-          date: doc.id, // Assuming document ID is the date
-          ...doc.data()
-        }));
-        console.log('Menu documents:', menuItems.length);
-      } catch (menuError) {
-        console.log('Menu collection not found or empty, creating default menu from dish data');
-        // Create a default menu entry for today with all available dishes
-        const today = new Date().toISOString().split('T')[0];
-        const uniqueItems = [...new Set(dishVotes.map(dish => dish.item))];
-        
-        if (uniqueItems.length > 0) {
-          menuItems = [{
-            id: today,
-            date: today,
-            items: uniqueItems
-          }];
+          Object.keys(itemData).forEach(key => {
+            const voteData = itemData[key];
+            if (voteData && typeof voteData === 'object' && voteData.type && voteData.timestamp) {
+              allVotes.push({
+                id: `${itemDoc.id}_${key}`,
+                item: key, // Use the key itself as the dish name
+                type: voteData.type,
+                timestamp: voteData.timestamp.toDate ? voteData.timestamp.toDate() : new Date(voteData.timestamp),
+                userName: voteData.userName || 'Unknown'
+              });
+            }
+          });
         }
       }
 
       console.log('Final data:', {
         votes: allVotes.length,
-        dishVotes: dishVotes.length,
-        menuItems: menuItems.length
+        dishVotes: dishVotes.length
       });
 
       setVoteData(allVotes);
       setDishVoteData(dishVotes);
-      setMenuData(menuItems);
-      
-      // Set default selected date to the most recent menu date
-      if (menuItems.length > 0 && !selectedDate) {
-        const sortedMenu = menuItems.sort((a, b) => new Date(b.date) - new Date(a.date));
-        setSelectedDate(sortedMenu[0].date);
-      }
       
     } catch (err) {
       console.error('Firebase fetch error:', err);
@@ -245,16 +204,6 @@ Object.keys(itemData).forEach(key => {
   const totalLikes = getFilteredData.filter(v => v.type === 'like').length;
   const totalDislikes = getFilteredData.filter(v => v.type === 'dislike').length;
 
-  // Format date for display
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return isNaN(date) ? 'Invalid Date' : date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
   // Loading state
   if (loading) {
     return (
@@ -327,7 +276,6 @@ Object.keys(itemData).forEach(key => {
               <p><strong>Total Vote Records:</strong> {voteData.length}</p>
               <p><strong>Filtered Vote Records:</strong> {getFilteredData.length}</p>
               <p><strong>Dish Vote Records:</strong> {dishVoteData.length}</p>
-              <p><strong>Menu Records:</strong> {menuData.length}</p>
               <p><strong>Current Time Range:</strong> {timeRange}</p>
               <p><strong>Current Filter Type:</strong> {filterType}</p>
               
@@ -350,23 +298,6 @@ Object.keys(itemData).forEach(key => {
 
         {/* Filters */}
         <div className="bg-white p-4 rounded-lg shadow mb-8 flex flex-wrap gap-4 items-center">
-          <Calendar size={20} className="text-gray-600" />
-          <select 
-            value={selectedDate} 
-            onChange={e => setSelectedDate(e.target.value)}
-            className="border rounded px-3 py-2"
-          >
-            <option value="">All Dates</option>
-            {menuData
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .map(menu => (
-                <option key={menu.id} value={menu.date}>
-                  {formatDate(menu.date)}
-                </option>
-              ))
-            }
-          </select>
-
           <Filter size={20} className="text-gray-600" />
           <select 
             value={timeRange} 
@@ -547,7 +478,9 @@ Object.keys(itemData).forEach(key => {
           <h3 className="text-xl font-semibold mb-4">Aggregated Dish Statistics</h3>
           {dishVoteData.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {dishVoteData.map((dish) => (
+              {dishVoteData
+                .sort((a, b) => (b.likes + b.dislikes) - (a.likes + a.dislikes))
+                .map((dish) => (
                 <div key={dish.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
                   <h4 className="font-semibold text-lg mb-3">{dish.item}</h4>
                   <div className="space-y-2">
@@ -563,6 +496,14 @@ Object.keys(itemData).forEach(key => {
                       <span className="text-gray-600">📊 Total:</span>
                       <span className="font-semibold">{dish.likes + dish.dislikes}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-purple-600">📈 Like Rate:</span>
+                      <span className="font-semibold">
+                        {dish.likes + dish.dislikes > 0 
+                          ? ((dish.likes / (dish.likes + dish.dislikes)) * 100).toFixed(1)
+                          : 0}%
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-500 mt-2">
                       Last Updated: {dish.lastUpdated.toLocaleDateString()}
                     </p>
@@ -575,43 +516,39 @@ Object.keys(itemData).forEach(key => {
           )}
         </div>
 
-        {/* Menu Items for Selected Date */}
+        {/* All Cafe Items Overview */}
         <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">
-            Menu Items {selectedDate && `for ${formatDate(selectedDate)}`}
-          </h3>
+          <h3 className="text-xl font-semibold mb-4">All Cafe Items Overview</h3>
           
-          {selectedDate && menuData.find(m => m.date === selectedDate)?.items ? (
+          {counts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {menuData.find(m => m.date === selectedDate).items.map((item, index) => {
-                const voteStats = counts.find(v => v.item.toLowerCase() === item.toLowerCase());
-                const dishStats = dishVoteData.find(d => d.item.toLowerCase() === item.toLowerCase());
+              {counts.map((item, index) => {
+                const dishStats = dishVoteData.find(d => d.item.toLowerCase() === item.item.toLowerCase());
                 
                 return (
                   <div key={index} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
-                    <h4 className="font-semibold text-lg mb-2">{item}</h4>
+                    <h4 className="font-semibold text-lg mb-2">{item.item}</h4>
                     
-                    {voteStats ? (
-                      <div className="space-y-1">
-                        <p className="text-sm">
-                          👍 {voteStats.likes} • 👎 {voteStats.dislikes} • {voteStats.ratio.toFixed(1)}% positive
+                    <div className="space-y-1">
+                      <p className="text-sm">
+                        👍 {item.likes} • 👎 {item.dislikes} • {item.ratio.toFixed(1)}% positive
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        From filtered votes ({timeRange})
+                      </p>
+                      {dishStats && (
+                        <p className="text-xs text-gray-500 border-t pt-1 mt-2">
+                          All-time: {dishStats.likes}👍 {dishStats.dislikes}👎
                         </p>
-                        {dishStats && (
-                          <p className="text-xs text-gray-500">
-                            Aggregated: {dishStats.likes}👍 {dishStats.dislikes}👎
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-400">No votes recorded yet</p>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           ) : (
             <p className="text-gray-500 text-center py-8">
-              {selectedDate ? 'No menu items found for selected date' : 'Select a date to view menu items'}
+              No cafe items found with votes in the selected time range
             </p>
           )}
         </div>
