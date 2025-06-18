@@ -16,6 +16,11 @@ export const useRealtimeNotifications = (
   useEffect(() => {
     if (!enableOrderNotifications) return;
 
+    // Reset refs when user changes
+    isInitialLoad.current = true;
+    lastOrderCount.current = 0;
+    previousOrderStates.current = new Map();
+
     let unsubscribeOrders = null;
 
     const setupOrderNotifications = async () => {
@@ -145,7 +150,7 @@ export const useRealtimeNotifications = (
         unsubscribeOrders();
       }
     };
-  }, [enableOrderNotifications, userEmail, isAdmin]);
+  }, [enableOrderNotifications, userEmail, isAdmin]); // Added userEmail to dependencies
 
   // Return methods that components can use
   return {

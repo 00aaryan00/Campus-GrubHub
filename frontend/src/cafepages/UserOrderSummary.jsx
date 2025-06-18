@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../firebase';
 import { NotificationManager } from '../utils/notifications';
-import { useRealtimeNotifications as useOrderNotifications } from '../hooks/useRealtimeNotifications';
+import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 import './UserOrderSummary.css';
 
 const UserOrderSummary = () => {
@@ -11,9 +11,13 @@ const UserOrderSummary = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [previousOrders, setPreviousOrders] = useState([]);
 
-  const { notifyOrderStatusChange, notifyOrderUpdate } = useOrderNotifications();
+  // FIXED: Properly use the notifications hook for customers
+  const { showToast } = useRealtimeNotifications(
+    true, // enableOrderNotifications
+    user?.email || null, // userEmail - pass the current user's email
+    false // isAdmin - false for customers
+  );
 
   useEffect(() => {
     const initializeComponent = async () => {
@@ -42,7 +46,8 @@ const UserOrderSummary = () => {
       setAuthLoading(false);
 
       if (currentUser) {
-        setupRealtimeOrderUpdates(currentUser.email);
+        // REMOVED: Manual setup since the hook handles this now
+        fetchUserOrders(currentUser.email);
       } else {
         setLoading(false);
       }
@@ -51,104 +56,7 @@ const UserOrderSummary = () => {
     return () => unsubscribe();
   }, []);
 
-  const setupRealtimeOrderUpdates = (userEmail) => {
-    try {
-      const q = query(
-        collection(db, 'preOrders'),
-        where('userEmail', '==', userEmail),
-        orderBy('orderTime', 'desc')
-      );
-
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const userOrders = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        if (previousOrders.length > 0) {
-          detectOrderChanges(userOrders, previousOrders);
-        }
-
-        setOrders(userOrders);
-        setPreviousOrders(userOrders);
-        setLoading(false);
-      }, (error) => {
-        console.error("Error in real-time listener:", error);
-        fetchUserOrders(userEmail);
-      });
-
-      return () => unsubscribe();
-    } catch (error) {
-      console.error("Error setting up real-time updates:", error);
-      fetchUserOrders(userEmail);
-    }
-  };
-
-  const detectOrderChanges = (currentOrders, previousOrders) => {
-    const previousOrdersMap = new Map(previousOrders.map(order => [order.id, order]));
-
-    currentOrders.forEach(currentOrder => {
-      const previousOrder = previousOrdersMap.get(currentOrder.id);
-
-      if (!previousOrder) return;
-
-      if (previousOrder.status !== currentOrder.status) {
-        notifyOrderStatusChange(
-          currentOrder.itemName,
-          currentOrder.status,
-          previousOrder.status
-        );
-
-        NotificationManager.showToast(
-          `Order ${currentOrder.itemName} is now ${currentOrder.status}`,
-          getToastType(currentOrder.status)
-        );
-      }
-
-      if (!previousOrder.pickupTime && currentOrder.pickupTime) {
-        NotificationManager.showNotification(
-          `🕐 Pickup Time Assigned: ${currentOrder.itemName}`,
-          {
-            body: `Your order is ready for pickup at ${currentOrder.pickupTime}`,
-            tag: `pickup-time-${currentOrder.id}`,
-            requireInteraction: true
-          }
-        );
-
-        NotificationManager.showToast(
-          `Pickup time set for ${currentOrder.itemName}: ${currentOrder.pickupTime}`,
-          'info'
-        );
-      }
-
-      if (!previousOrder.adminNotes && currentOrder.adminNotes) {
-        NotificationManager.showNotification(
-          `📝 Message from Admin: ${currentOrder.itemName}`,
-          {
-            body: currentOrder.adminNotes,
-            tag: `admin-notes-${currentOrder.id}`,
-            requireInteraction: true
-          }
-        );
-
-        NotificationManager.showToast(
-          `Admin added notes for ${currentOrder.itemName}`,
-          'info'
-        );
-      }
-    });
-  };
-
-  const getToastType = (status) => {
-    switch (status) {
-      case 'Accepted': return 'success';
-      case 'Ready': return 'success';
-      case 'Collected': return 'success';
-      case 'Rejected': return 'error';
-      default: return 'info';
-    }
-  };
-
+  // Simplified to just fetch initial orders since real-time updates are handled by the hook
   const fetchUserOrders = async (userEmail) => {
     try {
       const q = query(
@@ -162,7 +70,6 @@ const UserOrderSummary = () => {
         ...doc.data()
       }));
       setOrders(userOrders);
-      setPreviousOrders(userOrders);
     } catch (error) {
       try {
         const fallbackQuery = query(
@@ -175,7 +82,6 @@ const UserOrderSummary = () => {
           ...doc.data()
         }));
         setOrders(fallbackOrders);
-        setPreviousOrders(fallbackOrders);
       } catch (fallbackError) {
         NotificationManager.showToast("Error loading orders", "error");
       }
