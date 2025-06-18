@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import { auth } from "../firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
+import "./Home.css";
 
 const Home = () => {
   const [menu, setMenu] = useState({});
   const [votes, setVotes] = useState({});
   const [userVotes, setUserVotes] = useState({});
-  const [loading, setLoading] = useState(false); // Start with false to avoid initial flicker
+  const [loading, setLoading] = useState(false);
   const [quote, setQuote] = useState("");
   const [leaderboard, setLeaderboard] = useState([]);
   const [day, setDay] = useState("");
@@ -17,11 +18,12 @@ const Home = () => {
   const [processingVotes, setProcessingVotes] = useState({});
   const [dataCache, setDataCache] = useState({
     lastUpdated: null,
-    cacheDuration: 5 * 60 * 1000, // 5 minutes cache
+    cacheDuration: 5 * 60 * 1000,
     lastVoteDay: null
   });
   const [error, setError] = useState(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true); // Track initial load
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [floatingIcons, setFloatingIcons] = useState([]);
 
   // Debounce utility to prevent rapid API calls
   const debounce = (func, wait) => {
@@ -32,7 +34,29 @@ const Home = () => {
     };
   };
 
-  const loadInitialData = useCallback(async (forceRegular = false,forceRefresh = false) => {
+  // Function to add a new floating icon
+  const addFloatingIcon = useCallback(() => {
+    const icons = ["👍", "👎","🧀","🥦","🥪","🍰","🍕","🍔"];
+    const newIcon = {
+      id: Math.random().toString(36).substr(2, 9),
+      icon: icons[Math.floor(Math.random() * icons.length)],
+      left: `${Math.random() * 90 + 5}%`, // Random position between 5% and 95%
+      rotation: `${Math.random() * 360}deg` // Random rotation
+    };
+    setFloatingIcons(prev => [...prev, newIcon]);
+    // Remove icon after animation duration (2s)
+    setTimeout(() => {
+      setFloatingIcons(prev => prev.filter(icon => icon.id !== newIcon.id));
+    }, 2000);
+  }, []);
+
+  // Set up interval to add floating icons
+  useEffect(() => {
+    const interval = setInterval(addFloatingIcon, 1000); // Add new icon every 1 second
+    return () => clearInterval(interval);
+  }, [addFloatingIcon]);
+
+  const loadInitialData = useCallback(async (forceRegular = false, forceRefresh = false) => {
     try {
       const now = Date.now();
       const shouldUseCache = !forceRefresh && 
@@ -63,7 +87,6 @@ const Home = () => {
       const votesData = menuResponse.data?.votes || {};
       const dayData = menuResponse.data?.day || "";
 
-      // Reset user votes if the day has changed
       if (dataCache.lastVoteDay !== dayData) {
         setUserVotes({});
       }
@@ -88,9 +111,8 @@ const Home = () => {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [authToken, dataCache.lastVoteDay]); // Removed day from dependencies
+  }, [authToken, dataCache.lastVoteDay]);
 
-  // Debounced version of loadInitialData
   const debouncedLoadInitialData = useCallback(debounce(loadInitialData, 500), [loadInitialData]);
 
   useEffect(() => {
@@ -100,7 +122,6 @@ const Home = () => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return;
 
-      // Avoid redundant calls if auth state hasn't changed
       const authStateKey = currentUser ? currentUser.uid : null;
       if (lastAuthState === authStateKey) return;
       lastAuthState = authStateKey;
@@ -115,7 +136,6 @@ const Home = () => {
             headers: { Authorization: `Bearer ${token}` }
           });
           
-          // Only force refresh on initial login
           await loadInitialData(true);
         } catch (error) {
           console.error("Error setting up user:", error);
@@ -125,7 +145,7 @@ const Home = () => {
         setUser(null);
         setAuthToken(null);
         setUserVotes({});
-        await loadInitialData(true); // Force refresh on logout
+        await loadInitialData(true);
       }
     });
 
@@ -142,7 +162,6 @@ const Home = () => {
     setError(null);
 
     try {
-      // Optimistic UI update
       const previousVote = userVotes[item];
       const previousVotes = votes[item] || { like: 0, dislike: 0 };
       const newVotes = { ...previousVotes };
@@ -183,7 +202,6 @@ const Home = () => {
       if (retryCount < 2) {
         setTimeout(() => handleVoteClick(item, type, retryCount + 1), 1000);
       } else {
-        // Use debounced load to avoid rapid refreshes
         debouncedLoadInitialData(true);
         setError("Failed to record vote after retries. Data refreshed.");
       }
@@ -195,7 +213,7 @@ const Home = () => {
   const handleLogout = () => {
     signOut(auth)
       .then(() => {
-        alert("Logged out!");
+        alert("Logged out successfully!");
         window.location.href = "/";
       })
       .catch((error) => {
@@ -205,217 +223,240 @@ const Home = () => {
   };
 
   const handleManualRefresh = async () => {
-    await debouncedLoadInitialData(true);
+    await debouncedLoadInitialData(true, true);
   };
 
-  // Initial load on mount
   useEffect(() => {
     debouncedLoadInitialData();
   }, [debouncedLoadInitialData]);
 
   if (loading && isInitialLoad) {
-    return <p className="text-center mt-10 text-lg">Loading menu...</p>;
+    return (
+      <div className="loading-container">
+        <div className="loading-card">
+          <div className="loading-spinner"></div>
+          <p className="loading-text">Loading Campus GrubHub...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: "2rem", fontFamily: "Inter, sans-serif", maxWidth: "900px", margin: "0 auto" }}>
-      {error && (
-        <div style={{ background: "#ffebee", padding: "1rem", borderRadius: "8px", marginBottom: "1rem" }}>
-          <p style={{ color: "#c62828" }}>{error}</p>
-          <button
-            onClick={handleManualRefresh}
+    <div className="home-container">
+      {/* Header */}
+      <div className="header">
+        <div className="header-content">
+          <div className="header-left">
+            <div className="app-icon">
+              🍽️
+            </div>
+            <h1 className="app-title">
+              Campus GrubHub
+            </h1>
+          </div>
+          
+          {user && (
+            <div className="user-info">
+              <img
+                src={user.photoURL || "https://via.placeholder.com/40"}
+                alt="Profile"
+                className="user-avatar"
+              />
+              <span className="user-name">
+                {user.displayName || "User"}
+              </span>
+            </div>
+          )}
+        </div>
+        {/* Floating Icons */}
+        {floatingIcons.map(icon => (
+          <span
+            key={icon.id}
+            className="floating-icon"
             style={{
-              backgroundColor: "#1976d2",
-              color: "white",
-              padding: "8px 16px",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              marginTop: "0.5rem"
+              left: icon.left,
+              bottom: '10px',
+              '--random-rotation': icon.rotation
             }}
           >
-            🔄 Refresh Data
-          </button>
-        </div>
-      )}
+            {icon.icon}
+          </span>
+        ))}
+      </div>
 
-      {user && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-          padding: "1rem",
-          backgroundColor: "#f1f1f1",
-          borderRadius: "10px"
-        }}>
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <img
-              src={user.photoURL || "https://via.placeholder.com/50"}
-              alt="User"
-              style={{ width: "50px", height: "50px", borderRadius: "50%", marginRight: "1rem" }}
-            />
-            <div>
-              <h3 style={{ margin: 0 }}>{user.displayName || "User"}</h3>
-              <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>{user.email}</p>
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Error Message */}
+        {error && (
+          <div className="error-card">
+            <div className="error-content">
+              <span className="error-icon">⚠️</span>
+              <div className="error-details">
+                <h3 className="error-title">Oops! Something went wrong</h3>
+                <p className="error-message">{error}</p>
+                <button
+                  onClick={handleManualRefresh}
+                  className="error-refresh-btn"
+                >
+                  🔄 Refresh Data
+                </button>
+              </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: "1rem" }}>
-            <Link to="/stats">
-              <button style={{
-                backgroundColor: "#1976d2",
-                color: "white",
-                padding: "8px 16px",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer"
-              }}>
-                📊 View Stats
-              </button>
-            </Link>
-            <Link to="/auntys-cafe">
-              <button style={{
-                backgroundColor: "#1976d2",
-                color: "white",
-                padding: "8px 16px",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer"
-              }}>
-                Aunty's Cafe
-              </button>
-            </Link>
-            <button onClick={handleLogout} style={{
-              backgroundColor: "#d32f2f",
-              color: "white",
-              padding: "8px 16px",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer"
-            }}>
-              Logout
-            </button>
+        )}
+
+        {/* User Actions Panel */}
+        {user && (
+          <div className="user-panel">
+            <div className="user-panel-content">
+              <div className="user-welcome">
+                <img
+                  src={user.photoURL || "https://via.placeholder.com/60"}
+                  alt="User Profile"
+                  className="user-profile-pic"
+                />
+                <div>
+                  <h3 className="welcome-text">
+                    Welcome back, {user.displayName || "User"}! 👋
+                  </h3>
+                  <p className="user-email">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="action-buttons">
+                <Link to="/stats" className="action-link">
+                  <button className="stats-btn">
+                    📊 View Stats
+                  </button>
+                </Link>
+                <Link to="/auntys-cafe" className="action-link">
+                  <button className="cafe-btn">
+                    ☕ Aunty's Cafe
+                  </button>
+                </Link>
+                <button onClick={handleLogout} className="logout-btn">
+                  🚪 Sign Out
+                </button>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* Date and Title */}
+        <div className="page-header">
+          <h2 className="page-date">
+            🗓 {day || "Loading..."}
+          </h2>
+          <h1 className="page-title">
+            📅 Mess Menu
+          </h1>
         </div>
-      )}
 
-      <h2 style={{ marginBottom: "0.5rem", color: "#666" }}>
-        🗓 {day || "Loading..."}
-      </h2>
-      <h1 style={{ fontSize: "2.5rem", fontWeight: "bold", marginBottom: "1rem" }}>
-        📅 Today's Mess Menu
-      </h1>
+        {/* Loading Indicator */}
+        {loading && !isInitialLoad && (
+          <div className="updating-indicator">
+            <div className="updating-spinner"></div>
+            <span className="updating-text">Updating...</span>
+          </div>
+        )}
 
-      {loading && !isInitialLoad && (
-        <div style={{ position: "absolute", top: "10px", right: "10px", color: "#666" }}>
-          🔄 Updating...
+        {/* Daily Quote */}
+        <div className="quote-card">
+          <h3 className="quote-title">
+            ✨ Daily Inspiration
+          </h3>
+          <p className="quote-text">
+            "{quote || "Loading your daily dose of inspiration..."}"
+          </p>
         </div>
-      )}
 
-      <div style={{
-        background: "#e0f7fa",
-        padding: "1rem 1.5rem",
-        borderRadius: "10px",
-        marginBottom: "2rem",
-        borderLeft: "5px solid #00796b"
-      }}>
-        <h3 style={{ fontSize: "1.2rem", marginBottom: "0.5rem", color: "#004d40" }}>
-          ✨ Quote of the Day
-        </h3>
-        <p style={{ fontStyle: "italic", fontSize: "1.1rem" }}>{quote || "Loading quote..."}</p>
+        {/* Menu Sections */}
+        {Object.keys(menu).length === 0 && !loading ? (
+          <div className="no-menu-card">
+            <p className="no-menu-text">No menu data available at the moment.</p>
+          </div>
+        ) : (
+          Object.keys(menu).map((meal) => (
+            <div key={meal} className="meal-section">
+              <h2 className="meal-title">{meal.toUpperCase()} 🍽</h2>
+              <ul className="menu-list">
+                {(menu[meal] || []).map((item, i) => {
+                  const userVoted = userVotes[item];
+                  const isProcessing = processingVotes[item];
+                  
+                  return (
+                    <li key={i} className="menu-item">
+                      <span className="item-name">🍴 {item}</span>
+                      <div className="vote-section">
+                        <button
+                          onClick={() => handleVoteClick(item, "like")}
+                          className={`vote-btn like-btn ${userVoted === "like" ? "voted" : ""}`}
+                          disabled={!user || isProcessing}
+                        >
+                          {isProcessing ? "⌛" : "👍"}
+                        </button>
+                        <button
+                          onClick={() => handleVoteClick(item, "dislike")}
+                          className={`vote-btn dislike-btn ${userVoted === "dislike" ? "voted" : ""}`}
+                          disabled={!user || isProcessing}
+                        >
+                          {isProcessing ? "⌛" : "👎"}
+                        </button>
+                        <span className="vote-count">
+                          👍 {votes[item]?.like || 0} | 👎 {votes[item]?.dislike || 0}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
+        )}
+
+        {/* Leaderboard */}
+        <div className="leaderboard-card">
+          <h2 className="leaderboard-title">
+            🏆 Community Leaderboard
+          </h2>
+          {leaderboard.length > 0 ? (
+            <div className="leaderboard-list">
+              {leaderboard.map(({ _id, count }, i) => (
+                <div key={i} className={`leaderboard-item ${i < 3 ? "top-three" : ""}`}>
+                  <span className="rank">
+                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                  </span>
+                  <span className="leaderboard-name">{_id}</span>
+                  <span className="vote-count-leader">
+                    {count} votes
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="no-leaderboard-text">No voting data available yet. Be the first to vote!</p>
+          )}
+        </div>
       </div>
 
-      {Object.keys(menu).length === 0 && !loading ? (
-        <p>No menu data available.</p>
-      ) : (
-        Object.keys(menu).map((meal) => (
-          <div key={meal} style={{
-            background: "#f9f9f9",
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            marginBottom: "1.5rem",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
-          }}>
-            <h2 style={{ fontSize: "1.6rem", marginBottom: "1rem" }}>{meal.toUpperCase()} 🍽</h2>
-            <ul style={{ listStyle: "none", padding: 0 }}>
-              {(menu[meal] || []).map((item, i) => {
-                const userVoted = userVotes[item];
-                const isProcessing = processingVotes[item];
-                
-                return (
-                  <li key={i} style={{
-                    backgroundColor: "#fff",
-                    padding: "0.8rem",
-                    marginBottom: "0.5rem",
-                    borderRadius: "8px",
-                    border: "1px solid #ccc",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between"
-                  }}>
-                    <span>🍴 {item}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <button
-                        onClick={() => handleVoteClick(item, "like")}
-                        style={{
-                          backgroundColor: userVoted === "like" ? "#2e7d32" : "#4caf50",
-                          color: "white",
-                          border: userVoted === "like" ? "2px solid #1b5e20" : "none",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          cursor: user && !isProcessing ? "pointer" : "not-allowed",
-                          opacity: user ? (isProcessing ? 0.7 : 1) : 0.6
-                        }}
-                        disabled={!user || isProcessing}
-                      >
-                        {isProcessing ? "⌛" : "👍"}
-                      </button>
-                      <button
-                        onClick={() => handleVoteClick(item, "dislike")}
-                        style={{
-                          backgroundColor: userVoted === "dislike" ? "#c62828" : "#f44336",
-                          color: "white",
-                          border: userVoted === "dislike" ? "2px solid #b71c1c" : "none",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          cursor: user && !isProcessing ? "pointer" : "not-allowed",
-                          opacity: user ? (isProcessing ? 0.7 : 1) : 0.6
-                        }}
-                        disabled={!user || isProcessing}
-                      >
-                        {isProcessing ? "⌛" : "👎"}
-                      </button>
-                      <span>
-                        👍 {votes[item]?.like || 0} | 👎 {votes[item]?.dislike || 0}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+      {/* Global Footer */}
+      <footer className="footer">
+        <div className="footer-content">
+          <div className="footer-brand">
+            <div className="footer-icon">
+              🍽️
+            </div>
+            <h3 className="footer-title">
+              Campus GrubHub
+            </h3>
           </div>
-        ))
-      )}
-
-      <div style={{
-        background: "#f1f8e9",
-        padding: "1rem 1.5rem",
-        borderRadius: "10px",
-        marginTop: "2rem",
-        borderLeft: "5px solid #689f38"
-      }}>
-        <h2 style={{ fontSize: "1.5rem", color: "#33691e", marginBottom: "0.5rem" }}>
-          🏆 Leaderboard
-        </h2>
-        <ol>
-          {leaderboard.map(({ _id, count }, i) => (
-            <li key={i}>
-              {_id}: {count} votes
-            </li>
-          ))}
-        </ol>
-      </div>
+          <p className="footer-text">
+            © 2025 Campus GrubHub Team. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };

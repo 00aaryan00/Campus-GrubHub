@@ -87,47 +87,274 @@ function Login() {
 
   return (
     <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #FFDAB9 0%, #FFF7ED 100%)',
       display: 'flex',
-      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: '100vh',
-      backgroundColor: '#f5f5f5',
-      fontFamily: 'Inter, sans-serif'
+      padding: '1rem',
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
     }}>
+      {/* Floating Food Icons */}
       <div style={{
-        backgroundColor: 'white',
-        padding: '2rem',
-        borderRadius: '10px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        position: 'absolute',
+        top: '10%',
+        left: '10%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 6s ease-in-out infinite',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍕</div>
+      <div style={{
+        position: 'absolute',
+        top: '20%',
+        right: '15%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 4s ease-in-out infinite reverse',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍔</div>
+      <div style={{
+        position: 'absolute',
+        bottom: '15%',
+        left: '20%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 5s ease-in-out infinite',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🌮</div>
+      <div style={{
+        position: 'absolute',
+        bottom: '25%',
+        right: '10%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 7s ease-in-out infinite reverse',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍜</div>
+      <div style={{
+        position: 'absolute',
+        top: '30%',
+        left: '15%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 5.5s ease-in-out infinite',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍣</div>
+      <div style={{
+        position: 'absolute',
+        bottom: '20%',
+        right: '20%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 6.5s ease-in-out infinite reverse',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🥐</div>
+      <div style={{
+        position: 'absolute',
+        top: '15%',
+        right: '25%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 4.5s ease-in-out infinite',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍦</div>
+      <div style={{
+        position: 'absolute',
+        bottom: '10%',
+        left: '25%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 6.2s ease-in-out infinite reverse',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🥗</div>
+      <div style={{
+        position: 'absolute',
+        top: '5%',
+        right: '30%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 5.8s ease-in-out infinite',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🥪</div>
+      <div style={{
+        position: 'absolute',
+        bottom: '30%',
+        left: '5%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 6.8s ease-in-out infinite reverse',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍟</div>
+      <div style={{
+        position: 'absolute',
+        top: '25%',
+        left: '30%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 4.8s ease-in-out infinite',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🍰</div>
+      <div style={{
+        position: 'absolute',
+        bottom: '5%',
+        right: '5%',
+        fontSize: '3rem',
+        opacity: '0.4',
+        zIndex: 1,
+        animation: 'float 7.2s ease-in-out infinite reverse',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)'
+      }}>🥤</div>
+
+      <div style={{
+        background: '#F8FAFC',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '24px',
+        padding: '3rem 2.5rem',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
         textAlign: 'center',
-        maxWidth: '400px',
-        width: '100%'
+        maxWidth: '450px',
+        width: '100%',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        position: 'relative',
+        overflow: 'hidden',
+        zIndex: 2
       }}>
-        <h1 style={{ 
-          color: '#333', 
-          marginBottom: '0.5rem',
-          fontSize: '2rem'
-        }}>
-          🍽️ Campus GrubHub
-        </h1>
-        
-        <p style={{ 
-          color: '#666', 
+        {/* Decorative elements */}
+        <div style={{
+          position: 'absolute',
+          top: '-50px',
+          right: '-50px',
+          width: '100px',
+          height: '100px',
+          background: 'linear-gradient(45deg, #FF6B6B, #FBBF24)',
+          borderRadius: '50%',
+          opacity: '0.1'
+        }}></div>
+        <div style={{
+          position: 'absolute',
+          bottom: '-30px',
+          left: '-30px',
+          width: '60px',
+          height: '60px',
+          background: 'linear-gradient(45deg, #86EFAC, #4ADE80)',
+          borderRadius: '50%',
+          opacity: '0.1'
+        }}></div>
+
+        {/* Logo and Title */}
+        <div style={{
           marginBottom: '2rem',
-          fontSize: '1.1rem'
+          position: 'relative',
+          zIndex: 1
         }}>
-          Vote on your favorite mess meals!
-        </p>
+          <div style={{
+            fontSize: '3.5rem',
+            marginBottom: '0.5rem',
+            background: 'linear-gradient(45deg, #FF6B6B, #FBBF24)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            🍽️
+          </div>
+          <h1 style={{ 
+            color: '#2D3748', 
+            marginBottom: '0.5rem',
+            fontSize: '2.5rem',
+            fontWeight: '800',
+            letterSpacing: '-0.02em'
+          }}>
+            Campus GrubHub
+          </h1>
+          
+          <p style={{ 
+            color: '#4A5568', 
+            marginBottom: '0.5rem',
+            fontSize: '1.2rem',
+            fontWeight: '500'
+          }}>
+            Where Campus Eats, Students Meet! 🎓
+          </p>
+          
+          <p style={{ 
+            color: '#718096', 
+            fontSize: '0.95rem',
+            fontStyle: 'italic'
+          }}>
+            "Vote, Review, Discover - Your Mess, Your Voice!"
+          </p>
+        </div>
+
+        {/* Feature highlights */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-around',
+          marginBottom: '2rem',
+          padding: '1rem',
+          background: 'linear-gradient(135deg, #F8FAFC 0%, #EDF2F7 100%)',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ 
+              fontSize: '1.5rem', 
+              marginBottom: '0.25rem', 
+              color: '#86EFAC',
+              textShadow: '0 0 5px rgba(251, 191, 36, 0.3)'
+            }}>📊</div>
+            <div style={{ fontSize: '0.8rem', color: '#4A5568', fontWeight: '600' }}>Vote</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ 
+              fontSize: '1.5rem', 
+              marginBottom: '0.25rem', 
+              color: '#FBBF24',
+              textShadow: '0 0 5px rgba(251, 191, 36, 0.3)'
+            }}>⭐</div>
+            <div style={{ fontSize: '0.8rem', color: '#4A5568', fontWeight: '600' }}>Review</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ 
+              fontSize: '1.5rem', 
+              marginBottom: '0.25rem', 
+              color: '#FF6B6B',
+              textShadow: '0 0 5px rgba(251, 191, 36, 0.3)'
+            }}>🔥</div>
+            <div style={{ fontSize: '0.8rem', color: '#4A5568', fontWeight: '600' }}>Trending</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ 
+              fontSize: '1.5rem', 
+              marginBottom: '0.25rem', 
+              color: '#86EFAC',
+              textShadow: '0 0 5px rgba(251, 191, 36, 0.3)'
+            }}>🏆</div>
+            <div style={{ fontSize: '0.8rem', color: '#4A5568', fontWeight: '600' }}>Best Meals</div>
+          </div>
+        </div>
         
         {error && (
           <div style={{
-            backgroundColor: '#ffebee',
-            color: '#c62828',
+            backgroundColor: '#FED7D7',
+            color: '#C53030',
             padding: '1rem',
-            borderRadius: '5px',
-            marginBottom: '1rem',
-            border: '1px solid #ffcdd2'
+            borderRadius: '12px',
+            marginBottom: '1.5rem',
+            border: '1px solid #FEB2B2',
+            fontSize: '0.9rem',
+            fontWeight: '500'
           }}>
             {error}
           </div>
@@ -137,19 +364,36 @@ function Login() {
           onClick={handleLogin}
           disabled={loading}
           style={{
-            backgroundColor: loading ? '#ccc' : '#4285f4',
+            background: loading ? '#A0AEC0' : 'linear-gradient(135deg, #FF6B6B 0%, #EF4444 100%)',
             color: 'white',
-            padding: '12px 24px',
+            padding: '16px 24px',
             border: 'none',
-            borderRadius: '5px',
+            borderRadius: '12px',
             fontSize: '16px',
+            fontWeight: '600',
             cursor: loading ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '10px',
+            gap: '12px',
             width: '100%',
-            transition: 'background-color 0.3s'
+            transition: 'all 0.3s ease',
+            boxShadow: loading ? 'none' : '0 4px 15px rgba(239, 68, 68, 0.4)',
+            transform: loading ? 'none' : 'translateY(0)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.5)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 15px rgba(239, 68, 68, 0.4)';
+            }
           }}
         >
           {loading ? (
@@ -157,8 +401,8 @@ function Login() {
               <div style={{
                 width: '20px',
                 height: '20px',
-                border: '2px solid #fff',
-                borderTop: '2px solid transparent',
+                border: '2px solid rgba(255,255,255,0.3)',
+                borderTop: '2px solid #fff',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite'
               }}></div>
@@ -176,21 +420,60 @@ function Login() {
             </>
           )}
         </button>
-        
+
+        {/* Campus-specific slogans */}
         <div style={{
           marginTop: '2rem',
-          padding: '1rem',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '5px',
+          padding: '1.5rem',
+          background: 'linear-gradient(135deg, #FFEAA7 0%, #FAB1A0 100%)',
+          borderRadius: '12px',
           fontSize: '0.9rem',
-          color: '#666'
+          color: '#2D3748',
+          position: 'relative'
         }}>
-          <strong>Troubleshooting:</strong>
-          <ul style={{ textAlign: 'left', margin: '0.5rem 0' }}>
-            <li>Allow popups in your browser</li>
-            <li>Check your internet connection</li>
-            <li>Try refreshing the page</li>
-          </ul>
+          <div style={{ fontWeight: '700', marginBottom: '0.5rem', fontSize: '1rem' }}>
+            🚀 Join the Campus Food Revolution!
+          </div>
+          <div style={{ marginBottom: '0.75rem' }}>
+            <strong>✨ What awaits you:</strong>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', textAlign: 'left' }}>
+            <div>🥄 Rate daily mess meals</div>
+            <div>🍲 Discover trending dishes</div>
+            <div>🥟 Share honest reviews</div>
+            <div>🍗 Vote for favorites</div>
+            <div>☕ Be notified about cafe dishes</div>
+            <div>📝 Give reviews to cafe dishes</div>
+          </div>
+        </div>
+
+        <div style={{
+          marginTop: '1.5rem',
+          padding: '1rem',
+          backgroundColor: '#F8FAFC',
+          borderRadius: '8px',
+          fontSize: '0.85rem',
+          color: '#718096',
+          border: '1px solid #E2E8F0'
+        }}>
+          <div style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
+            🔧 Having trouble logging in?
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            • Enable popups in your browser<br/>
+            • Check your internet connection<br/>
+            • Contact admin if issues persist
+          </div>
+        </div>
+
+        {/* Footer tagline */}
+        <div style={{
+          marginTop: '1.5rem',
+          fontSize: '0.8rem',
+          color: '#A0AEC0',
+          fontStyle: 'italic'
+        }}>
+          "From Students, For Students" 💙
         </div>
       </div>
       
@@ -198,6 +481,10 @@ function Login() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
         }
       `}</style>
     </div>

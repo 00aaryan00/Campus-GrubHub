@@ -3,7 +3,8 @@ import { collection, getDocs, query, where, orderBy, onSnapshot } from 'firebase
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../firebase';
 import { NotificationManager } from '../utils/notifications';
-import { useOrderNotifications } from '../hooks/useRealtimeNotifications';
+import { useRealtimeNotifications as useOrderNotifications } from '../hooks/useRealtimeNotifications';
+import './UserOrderSummary.css';
 
 const UserOrderSummary = () => {
   const [orders, setOrders] = useState([]);
@@ -12,12 +13,10 @@ const UserOrderSummary = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [previousOrders, setPreviousOrders] = useState([]);
 
-  // Use the order notifications hook
   const { notifyOrderStatusChange, notifyOrderUpdate } = useOrderNotifications();
 
   useEffect(() => {
     const initializeComponent = async () => {
-      // Request notification permission when component mounts
       try {
         const permissionGranted = await NotificationManager.requestPermission();
         if (permissionGranted) {
@@ -37,12 +36,11 @@ const UserOrderSummary = () => {
 
   useEffect(() => {
     const auth = getAuth();
-    
-    // Listen for authentication state changes
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
-      
+
       if (currentUser) {
         setupRealtimeOrderUpdates(currentUser.email);
       } else {
@@ -55,80 +53,59 @@ const UserOrderSummary = () => {
 
   const setupRealtimeOrderUpdates = (userEmail) => {
     try {
-      console.log("Setting up real-time order updates for:", userEmail);
-      
       const q = query(
         collection(db, 'preOrders'),
         where('userEmail', '==', userEmail),
         orderBy('orderTime', 'desc')
       );
 
-      // Set up real-time listener
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const userOrders = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-        
-        console.log("Real-time order update:", userOrders);
-        
-        // Detect status changes and new orders
+
         if (previousOrders.length > 0) {
           detectOrderChanges(userOrders, previousOrders);
         }
-        
+
         setOrders(userOrders);
         setPreviousOrders(userOrders);
         setLoading(false);
       }, (error) => {
         console.error("Error in real-time listener:", error);
-        // Fallback to one-time fetch
         fetchUserOrders(userEmail);
       });
 
-      // Cleanup listener on unmount
       return () => unsubscribe();
     } catch (error) {
       console.error("Error setting up real-time updates:", error);
-      // Fallback to one-time fetch
       fetchUserOrders(userEmail);
     }
   };
 
   const detectOrderChanges = (currentOrders, previousOrders) => {
     const previousOrdersMap = new Map(previousOrders.map(order => [order.id, order]));
-    
+
     currentOrders.forEach(currentOrder => {
       const previousOrder = previousOrdersMap.get(currentOrder.id);
-      
-      if (!previousOrder) {
-        // New order (shouldn't happen in user view, but handle it)
-        console.log("New order detected:", currentOrder);
-        return;
-      }
-      
-      // Check for status changes
+
+      if (!previousOrder) return;
+
       if (previousOrder.status !== currentOrder.status) {
-        console.log(`Status changed for ${currentOrder.itemName}: ${previousOrder.status} -> ${currentOrder.status}`);
-        
-        // Show notification for status change
         notifyOrderStatusChange(
           currentOrder.itemName,
           currentOrder.status,
           previousOrder.status
         );
-        
-        // Show toast notification
+
         NotificationManager.showToast(
           `Order ${currentOrder.itemName} is now ${currentOrder.status}`,
           getToastType(currentOrder.status)
         );
       }
-      
-      // Check for pickup time assignment
+
       if (!previousOrder.pickupTime && currentOrder.pickupTime) {
-        console.log(`Pickup time assigned for ${currentOrder.itemName}: ${currentOrder.pickupTime}`);
-        
         NotificationManager.showNotification(
           `🕐 Pickup Time Assigned: ${currentOrder.itemName}`,
           {
@@ -137,17 +114,14 @@ const UserOrderSummary = () => {
             requireInteraction: true
           }
         );
-        
+
         NotificationManager.showToast(
           `Pickup time set for ${currentOrder.itemName}: ${currentOrder.pickupTime}`,
           'info'
         );
       }
-      
-      // Check for admin notes
+
       if (!previousOrder.adminNotes && currentOrder.adminNotes) {
-        console.log(`Admin notes added for ${currentOrder.itemName}`);
-        
         NotificationManager.showNotification(
           `📝 Message from Admin: ${currentOrder.itemName}`,
           {
@@ -156,7 +130,7 @@ const UserOrderSummary = () => {
             requireInteraction: true
           }
         );
-        
+
         NotificationManager.showToast(
           `Admin added notes for ${currentOrder.itemName}`,
           'info'
@@ -177,8 +151,6 @@ const UserOrderSummary = () => {
 
   const fetchUserOrders = async (userEmail) => {
     try {
-      console.log("Fetching orders for email:", userEmail);
-      
       const q = query(
         collection(db, 'preOrders'),
         where('userEmail', '==', userEmail),
@@ -189,16 +161,10 @@ const UserOrderSummary = () => {
         id: doc.id,
         ...doc.data()
       }));
-      
-      console.log("Found orders:", userOrders);
       setOrders(userOrders);
       setPreviousOrders(userOrders);
     } catch (error) {
-      console.error("Error fetching user orders:", error);
-      
-      // Fallback query without orderBy
       try {
-        console.log("Retrying without orderBy...");
         const fallbackQuery = query(
           collection(db, 'preOrders'),
           where('userEmail', '==', userEmail)
@@ -208,28 +174,14 @@ const UserOrderSummary = () => {
           id: doc.id,
           ...doc.data()
         }));
-        console.log("Fallback orders found:", fallbackOrders);
         setOrders(fallbackOrders);
         setPreviousOrders(fallbackOrders);
       } catch (fallbackError) {
-        console.error("Fallback query also failed:", fallbackError);
         NotificationManager.showToast("Error loading orders", "error");
       }
     } finally {
       setLoading(false);
     }
-  };
-
-  // Test notification function
-  const testNotifications = () => {
-    NotificationManager.showNotification(
-      "🧪 Test Order Notification",
-      {
-        body: "This is a test notification for order updates!",
-        requireInteraction: false
-      }
-    );
-    NotificationManager.showToast("Test notification sent!", "info");
   };
 
   const getStatusIcon = (status) => {
@@ -240,17 +192,6 @@ const UserOrderSummary = () => {
       case 'Collected': return '✨';
       case 'Rejected': return '❌';
       default: return '📋';
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Accepted': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Ready': return 'bg-green-100 text-green-800 border-green-200';
-      case 'Collected': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'Rejected': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -271,181 +212,169 @@ const UserOrderSummary = () => {
     return date.toLocaleString();
   };
 
-  // Show loading while checking auth state
+  const getProgressWidth = (status) => {
+    switch (status) {
+      case 'Pending': return '25%';
+      case 'Accepted': return '50%';
+      case 'Ready': return '75%';
+      case 'Collected':
+      case 'Rejected': return '100%';
+      default: return '25%';
+    }
+  };
+
   if (authLoading) {
     return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-300 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-32 bg-gray-300 rounded mb-4"></div>
+      <div className="orders-container">
+        <div className="orders-loading">
+          <div className="orders-loading-spinner"></div>
+          <div className="orders-loading-text">Checking authentication...</div>
         </div>
       </div>
     );
   }
 
-  // Show loading while fetching orders
   if (loading) {
     return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-300 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-32 bg-gray-300 rounded mb-4"></div>
+      <div className="orders-container">
+        <div className="orders-loading">
+          <div className="orders-loading-spinner"></div>
+          <div className="orders-loading-text">Loading your orders...</div>
         </div>
-        <p className="text-gray-600 mt-2">Loading your orders...</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="p-4 text-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-red-800 mb-2">Authentication Required</h3>
-          <p className="text-red-600">Please login to view your orders.</p>
+      <div className="orders-container">
+        <div className="auth-error">
+          <div className="auth-error-container">
+            <h3 className="auth-error-title">Authentication Required</h3>
+            <p className="auth-error-text">Please login to view your orders.</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-3xl font-bold text-gray-900">My Orders</h2>
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-gray-500 flex items-center gap-1">
+    <div className="orders-container">
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="orders-header">
+          <h2 className="orders-title">My Orders</h2>
+          <p className="orders-subtitle">Track your pre-orders from Aunty's Café</p>
+          <p className="orders-user-info">Welcome, {user.displayName || user.email}!</p>
+          
+          <div className="orders-header-actions">
+            <div className="orders-notifications-status">
               🔔 <span>Real-time updates enabled</span>
             </div>
-            <button 
-              onClick={testNotifications}
-              className="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-            >
-              Test Notifications
-            </button>
           </div>
         </div>
-        <p className="text-gray-600">Track your pre-orders from Aunty's Café</p>
-        <p className="text-sm text-gray-500">Welcome, {user.displayName || user.email}!</p>
-      </div>
 
-      {orders.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="bg-gray-50 rounded-lg p-8">
-            <div className="text-6xl mb-4">🍽️</div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">No Orders Yet</h3>
-            <p className="text-gray-500 mb-4">You haven't placed any pre-orders yet.</p>
-            <button
-              onClick={() => window.location.href = '/menu'}
-              className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-            >
-              Browse Menu
-            </button>
+        {orders.length === 0 ? (
+          <div className="empty-orders-state">
+            <div className="empty-orders-container">
+              <div className="empty-orders-icon">🍽️</div>
+              <h3 className="empty-orders-title">No Orders Yet</h3>
+              <p className="empty-orders-subtitle">You haven't placed any pre-orders yet.</p>
+              <button
+                onClick={() => window.location.href = '/menu'}
+                className="browse-menu-btn"
+              >
+                Browse Menu
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {orders.map(order => (
-            <div key={order.id} className="bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-1">{order.itemName}</h3>
-                    <p className="text-2xl font-bold text-green-600">₹{order.price}</p>
+        ) : (
+          <div className="orders-list">
+            {orders.map(order => (
+              <div key={order.id} className="order-card">
+                <div className="order-header">
+                  <div className="order-item-info">
+                    <h3>{order.itemName}</h3>
+                    <div className="order-price">₹{order.price}</div>
                   </div>
-                  <div className={`px-4 py-2 rounded-full border ${getStatusColor(order.status)}`}>
-                    <span className="text-sm font-medium">
-                      {getStatusIcon(order.status)} {order.status}
-                    </span>
+                  <div className={`status-badge status-${order.status.toLowerCase()}`}>
+                    <span>{getStatusIcon(order.status)} {order.status}</span>
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Status Update:</p>
-                  <p className="text-gray-900">{getStatusMessage(order.status)}</p>
+                <div className="status-message">
+                  <div className="status-message-label">Status Update:</div>
+                  <div className="status-message-text">{getStatusMessage(order.status)}</div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1"><strong>Order Placed:</strong></p>
-                    <p className="text-gray-900">{formatTime(order.orderTime)}</p>
+                <div className="order-details-grid">
+                  <div className="order-detail-item">
+                    <div className="order-detail-label">Order Placed:</div>
+                    <div className="order-detail-value">{formatTime(order.orderTime)}</div>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1"><strong>Pickup Time:</strong></p>
+                  <div className="order-detail-item">
+                    <div className="order-detail-label">Pickup Time:</div>
                     {order.pickupTime ? (
-                      <p className="text-gray-900 font-medium">🕐 {order.pickupTime}</p>
+                      <div className="order-detail-value pickup-time-assigned">
+                        🕐 {order.pickupTime}
+                      </div>
                     ) : (
-                      <p className="text-orange-600">⏱ Admin will assign pickup time soon</p>
+                      <div className="order-detail-value pickup-time-pending">
+                        ⏱ Admin will assign pickup time soon
+                      </div>
                     )}
                   </div>
                 </div>
 
                 {order.adminNotes && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm font-medium text-blue-800 mb-2">📝 Admin Notes:</p>
-                    <p className="text-blue-900">{order.adminNotes}</p>
+                  <div className="admin-notes">
+                    <div className="admin-notes-label">
+                      📝 Admin Notes:
+                    </div>
+                    <div className="admin-notes-text">{order.adminNotes}</div>
                   </div>
                 )}
 
-                {/* Progress Bar */}
-                <div className="mb-4">
-                  <div className="flex justify-between text-xs text-gray-500 mb-2">
+                <div className="progress-container">
+                  <div className="progress-labels">
                     <span>Ordered</span>
                     <span>Accepted</span>
                     <span>Ready</span>
                     <span>Collected</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="progress-bar">
                     <div 
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        order.status === 'Rejected' ? 'bg-red-500' : 'bg-green-500'
-                      }`}
+                      className={`progress-fill ${order.status === 'Rejected' ? 'progress-rejected' : 'progress-normal'}`}
                       style={{
-                        width: order.status === 'Pending' ? '25%' :
-                               order.status === 'Accepted' ? '50%' :
-                               order.status === 'Ready' ? '75%' :
-                               order.status === 'Collected' ? '100%' :
-                               order.status === 'Rejected' ? '100%' : '25%'
+                        width: getProgressWidth(order.status)
                       }}
                     ></div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  {order.status === 'Ready' && (
-                    <div className="flex-1 bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                      <p className="text-green-800 font-medium">🎉 Ready for Pickup!</p>
-                      <p className="text-green-600 text-sm">Please collect your order</p>
-                    </div>
-                  )}
-                  {order.status === 'Collected' && (
-                    <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                      <p className="text-gray-800 font-medium">✨ Order Completed</p>
-                      <p className="text-gray-600 text-sm">Thank you for your order!</p>
-                    </div>
-                  )}
-                  {order.status === 'Rejected' && (
-                    <div className="flex-1 bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                      <p className="text-red-800 font-medium">❌ Order Rejected</p>
-                      <p className="text-red-600 text-sm">Please contact admin for details</p>
-                    </div>
-                  )}
-                </div>
+                {order.status === 'Ready' && (
+                  <div className="order-action-section action-ready">
+                    <div className="action-title">🎉 Ready for Pickup!</div>
+                    <div className="action-subtitle">Please collect your order</div>
+                  </div>
+                )}
+                
+                {order.status === 'Collected' && (
+                  <div className="order-action-section action-completed">
+                    <div className="action-title">✨ Order Completed</div>
+                    <div className="action-subtitle">Thank you for your order!</div>
+                  </div>
+                )}
+                
+                {order.status === 'Rejected' && (
+                  <div className="order-action-section action-rejected">
+                    <div className="action-title">❌ Order Rejected</div>
+                    <div className="action-subtitle">Please contact admin for details</div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Debug section */}
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <h4 className="font-semibold text-gray-700 mb-2">Debug Info:</h4>
-        <div className="text-sm text-gray-600 space-y-1">
-          <p><strong>Total orders:</strong> {orders.length}</p>
-          <p><strong>User email:</strong> {user?.email}</p>
-          <p><strong>Notifications:</strong> {Notification.permission}</p>
-          <p><strong>Real-time updates:</strong> Active</p>
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

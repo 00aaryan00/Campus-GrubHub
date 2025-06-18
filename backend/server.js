@@ -1,11 +1,34 @@
 const express = require("express");
 const cors = require("cors");
+const NodeCache = require("node-cache"); // npm install node-cache
 const { admin, db } = require("./firebaseAdmin");
 const cafeRoutes = require("./backedroutes");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize caches
+const menuCache = new NodeCache({ stdTTL: 3600 }); // 1 hour cache
+const votesCache = new NodeCache({ stdTTL: 300 }); // 5 minutes cache for votes
+const userVotesCache = new NodeCache({ stdTTL: 600 }); // 10 minutes cache for user votes
+const leaderboardCache = new NodeCache({ stdTTL: 900 }); // 15 minutes cache for leaderboard
+
+// Rate limiting
+const rateLimit = require("express-rate-limit");
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // limit each IP to 50 requests per windowMs
+  message: "Too many requests from this IP, please try again later."
+});
+
+const heavyLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 requests per minute
+  message: "Rate limit exceeded for this endpoint."
+});
+
+app.use(limiter);
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
@@ -17,7 +40,7 @@ app.use("/auntys-cafe", cafeRoutes);
 
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-// Weekly Mess Menu
+// Weekly Mess Menu (keep as static data)
 let messMenu = {
   Monday: {
     breakfast: ["Aloo Paratha", "Butter", "Onion Flakes", "Chana Sprouts"],
@@ -71,9 +94,21 @@ const quotes = [
   "Good food equals good mood!"
 ];
 
-// Initialize menu in Firestore
+// Daily quote cache (only changes once per day)
+let dailyQuoteCache = {
+  quote: null,
+  date: null
+};
+
+// Initialize menu in Firestore (only run once)
 async function initializeMenu() {
   try {
+    const cacheKey = 'menu_initialized';
+    if (menuCache.get(cacheKey)) {
+      console.log('✅ Menu initialization skipped (cached)');
+      return;
+    }
+
     const menuRef = db.collection('menu').doc('weekly');
     const doc = await menuRef.get();
     if (!doc.exists) {
@@ -82,14 +117,23 @@ async function initializeMenu() {
     } else {
       console.log('✅ Menu already exists in Firestore, skipping initialization');
     }
+    
+    // Cache the initialization status for 24 hours
+    menuCache.set(cacheKey, true, 86400);
   } catch (error) {
     console.error('❌ Error initializing menu:', error);
   }
 }
 
-// Initialize dish votes in Firestore
+// Initialize dish votes in Firestore (only run once)
 async function initializeDishVotes() {
   try {
+    const cacheKey = 'votes_initialized';
+    if (menuCache.get(cacheKey)) {
+      console.log('✅ Dish votes initialization skipped (cached)');
+      return;
+    }
+
     const allDishes = new Set();
     for (let dayMeals of Object.values(messMenu)) {
       for (let items of Object.values(dayMeals)) {
@@ -99,21 +143,38 @@ async function initializeDishVotes() {
       }
     }
 
+    const batch = db.batch();
+    let batchCount = 0;
+
     for (let dish of allDishes) {
       const safeDishId = dish.replace(/\//g, "_");
       const dishRef = db.collection("dishVotes").doc(safeDishId);
+      
+      // Check if document exists (single read per dish)
       const doc = await dishRef.get();
-
       if (!doc.exists) {
-        await dishRef.set({
+        batch.set(dishRef, {
           item: dish,
           like: 0,
           dislike: 0,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
+        batchCount++;
+        
+        // Commit batch every 500 operations (Firestore limit)
+        if (batchCount >= 500) {
+          await batch.commit();
+          batchCount = 0;
+        }
       }
     }
 
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    // Cache the initialization status for 24 hours
+    menuCache.set(cacheKey, true, 86400);
     console.log("✅ Dish votes initialized in Firestore");
   } catch (error) {
     console.error("❌ Error initializing dish votes:", error);
@@ -128,7 +189,15 @@ async function verifyToken(req, res, next) {
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    // Cache decoded tokens for 10 minutes to reduce verification calls
+    const tokenCacheKey = `token_${token.substring(0, 20)}`;
+    let decodedToken = userVotesCache.get(tokenCacheKey);
+    
+    if (!decodedToken) {
+      decodedToken = await admin.auth().verifyIdToken(token);
+      userVotesCache.set(tokenCacheKey, decodedToken, 600);
+    }
+    
     req.user = decodedToken;
     next();
   } catch (error) {
@@ -136,9 +205,17 @@ async function verifyToken(req, res, next) {
   }
 }
 
-// Store/Update user profile in Firestore
+// Store/Update user profile in Firestore with caching
 async function saveUserProfile(userInfo) {
   try {
+    const cacheKey = `user_save_${userInfo.uid}`;
+    const recentlySaved = userVotesCache.get(cacheKey);
+    
+    // Prevent duplicate saves within 5 minutes
+    if (recentlySaved) {
+      return { cached: true };
+    }
+
     const userRef = db.collection('users').doc(userInfo.uid);
     await userRef.set({
       uid: userInfo.uid,
@@ -148,55 +225,77 @@ async function saveUserProfile(userInfo) {
       lastLogin: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+    
+    // Cache to prevent duplicate saves
+    userVotesCache.set(cacheKey, true, 300);
+    return { saved: true };
   } catch (error) {
     console.error('Error saving user profile:', error);
+    throw error;
   }
 }
 
-// API to save user profile
-app.post("/save-user", verifyToken, async (req, res) => {
+// API to save user profile (with heavy rate limiting)
+app.post("/save-user", heavyLimiter, verifyToken, async (req, res) => {
   try {
-    await saveUserProfile(req.user);
-    res.json({ success: true, message: "User profile saved" });
+    const result = await saveUserProfile(req.user);
+    res.json({ 
+      success: true, 
+      message: result.cached ? "User profile recently saved" : "User profile saved" 
+    });
   } catch (error) {
     res.status(500).json({ error: "Failed to save user profile" });
   }
 });
 
-// API to get today's menu with live vote counts
-app.get("/menu", async (req, res) => {
+// API to get today's menu with cached vote counts
+app.get("/menu", heavyLimiter, async (req, res) => {
   try {
     const todayIndex = new Date().getDay();
     const today = days[todayIndex];
-
-    // Get menu from Firestore
-    const menuDoc = await db.collection('menu').doc('weekly').get();
-    if (!menuDoc.exists) {
-      return res.status(404).json({ error: "Menu not found" });
+    const cacheKey = `menu_${today}`;
+    
+    // Check cache first
+    const cachedData = menuCache.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
     }
-    const fullMenu = menuDoc.data();
-    const todayMenu = fullMenu[today] || {};
 
-    // Get current day's vote counts
-    const votesSnapshot = await db.collection('dishVotes').get();
-    const votesMap = {};
-    votesSnapshot.forEach(doc => {
-      const data = doc.data();
-      // Only include votes for items in today's menu
-      const allTodayItems = Object.values(todayMenu).flat();
-      if (allTodayItems.includes(data.item)) {
-        votesMap[data.item] = { like: data.like, dislike: data.dislike };
-      }
-    });
+    // Use static menu data instead of reading from Firestore every time
+    const todayMenu = messMenu[today] || {};
 
-    res.json({ menu: todayMenu, votes: votesMap, day: today });
+    // Get current day's vote counts (cached)
+    const votesCacheKey = `votes_${today}`;
+    let votesMap = votesCache.get(votesCacheKey);
+    
+    if (!votesMap) {
+      const votesSnapshot = await db.collection('dishVotes').get();
+      votesMap = {};
+      votesSnapshot.forEach(doc => {
+        const data = doc.data();
+        // Only include votes for items in today's menu
+        const allTodayItems = Object.values(todayMenu).flat();
+        if (allTodayItems.includes(data.item)) {
+          votesMap[data.item] = { like: data.like, dislike: data.dislike };
+        }
+      });
+      
+      // Cache votes for 5 minutes
+      votesCache.set(votesCacheKey, votesMap);
+    }
+
+    const responseData = { menu: todayMenu, votes: votesMap, day: today };
+    
+    // Cache menu response for 1 hour
+    menuCache.set(cacheKey, responseData);
+    res.json(responseData);
   } catch (error) {
     console.error("Error fetching menu:", error);
     res.status(500).json({ error: "Failed to fetch menu" });
   }
 });
 
-// Vote API — like/dislike any item (requires authentication)
+// Vote API with optimized caching
 app.post("/vote", verifyToken, async (req, res) => {
   const { item, type, day, timestamp } = req.body;
   const userId = req.user.uid;
@@ -216,7 +315,7 @@ app.post("/vote", verifyToken, async (req, res) => {
     const userVoteRef = db.collection('userVotes').doc(`${userId}_${safeDishId}_${day}`);
     const dishVoteRef = db.collection('dishVotes').doc(safeDishId);
 
-    await db.runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction) => {
       const [userVoteDoc, dishVoteDoc] = await Promise.all([
         transaction.get(userVoteRef),
         transaction.get(dishVoteRef)
@@ -267,17 +366,31 @@ app.post("/vote", verifyToken, async (req, res) => {
       return { newVoteType, dishVoteData: { ...dishVoteData, ...updates } };
     });
 
-    // Fetch updated data
+    // Clear relevant caches after vote
+    votesCache.del(`votes_${today}`);
+    menuCache.del(`menu_${today}`);
+    userVotesCache.del(`user_votes_${userId}_${today}`);
+    leaderboardCache.del('leaderboard');
+
+    // Fetch updated data (single read)
     const updatedDishDoc = await dishVoteRef.get();
-    const updatedUserVotes = await db.collection('userVotes')
-      .where('userId', '==', userId)
-      .where('day', '==', today)
-      .get();
-    const userVotesMap = {};
-    updatedUserVotes.forEach(doc => {
-      const data = doc.data();
-      userVotesMap[data.item] = data.voteType;
-    });
+    
+    // Get user votes from cache or fetch
+    const userVotesCacheKey = `user_votes_${userId}_${today}`;
+    let userVotesMap = userVotesCache.get(userVotesCacheKey);
+    
+    if (!userVotesMap) {
+      const updatedUserVotes = await db.collection('userVotes')
+        .where('userId', '==', userId)
+        .where('day', '==', today)
+        .get();
+      userVotesMap = {};
+      updatedUserVotes.forEach(doc => {
+        const data = doc.data();
+        userVotesMap[data.item] = data.voteType;
+      });
+      userVotesCache.set(userVotesCacheKey, userVotesMap);
+    }
 
     res.json({
       success: true,
@@ -293,23 +406,32 @@ app.post("/vote", verifyToken, async (req, res) => {
   }
 });
 
-// Get user's votes for current day
+// Get user's votes for current day (heavily cached)
 app.get("/user-votes", verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
     const todayIndex = new Date().getDay();
     const today = days[todayIndex];
+    const cacheKey = `user_votes_${userId}_${today}`;
 
-    const userVotesSnapshot = await db.collection('userVotes')
-      .where('userId', '==', userId)
-      .where('day', '==', today)
-      .get();
+    // Check cache first
+    let userVotes = userVotesCache.get(cacheKey);
+    
+    if (!userVotes) {
+      const userVotesSnapshot = await db.collection('userVotes')
+        .where('userId', '==', userId)
+        .where('day', '==', today)
+        .get();
 
-    const userVotes = {};
-    userVotesSnapshot.forEach(doc => {
-      const data = doc.data();
-      userVotes[data.item] = data.voteType;
-    });
+      userVotes = {};
+      userVotesSnapshot.forEach(doc => {
+        const data = doc.data();
+        userVotes[data.item] = data.voteType;
+      });
+      
+      // Cache for 10 minutes
+      userVotesCache.set(cacheKey, userVotes);
+    }
 
     res.json(userVotes);
   } catch (error) {
@@ -318,25 +440,44 @@ app.get("/user-votes", verifyToken, async (req, res) => {
   }
 });
 
-// Quote of the day
+// Quote of the day (cached daily)
 app.get("/daily-quote", (req, res) => {
+  const today = new Date().toDateString();
+  
+  // Check if we have today's quote cached
+  if (dailyQuoteCache.quote && dailyQuoteCache.date === today) {
+    return res.json({ quote: dailyQuoteCache.quote });
+  }
+  
+  // Generate new quote and cache it
   const index = new Date().getDate() % quotes.length;
-  res.json({ quote: quotes[index] });
+  const quote = quotes[index];
+  
+  dailyQuoteCache = { quote, date: today };
+  res.json({ quote });
 });
 
-// Top 5 liked dishes leaderboard
+// Top 5 liked dishes leaderboard (cached)
 app.get("/leaderboard", async (req, res) => {
   try {
-    const votesSnapshot = await db.collection('dishVotes')
-      .orderBy('like', 'desc')
-      .limit(5)
-      .get();
+    const cacheKey = 'leaderboard';
+    let leaderboard = leaderboardCache.get(cacheKey);
+    
+    if (!leaderboard) {
+      const votesSnapshot = await db.collection('dishVotes')
+        .orderBy('like', 'desc')
+        .limit(5)
+        .get();
 
-    const leaderboard = [];
-    votesSnapshot.forEach(doc => {
-      const data = doc.data();
-      leaderboard.push({ _id: data.item, count: data.like });
-    });
+      leaderboard = [];
+      votesSnapshot.forEach(doc => {
+        const data = doc.data();
+        leaderboard.push({ _id: data.item, count: data.like });
+      });
+      
+      // Cache for 15 minutes
+      leaderboardCache.set(cacheKey, leaderboard);
+    }
 
     res.json(leaderboard);
   } catch (error) {
@@ -345,14 +486,23 @@ app.get("/leaderboard", async (req, res) => {
   }
 });
 
-// Get user profile
+// Get user profile (cached)
 app.get("/user-profile", verifyToken, async (req, res) => {
   try {
-    const userDoc = await db.collection('users').doc(req.user.uid).get();
-    if (userDoc.exists) {
-      res.json(userDoc.data());
+    const cacheKey = `profile_${req.user.uid}`;
+    let userProfile = userVotesCache.get(cacheKey);
+    
+    if (!userProfile) {
+      const userDoc = await db.collection('users').doc(req.user.uid).get();
+      if (userDoc.exists) {
+        userProfile = userDoc.data();
+        userVotesCache.set(cacheKey, userProfile);
+        res.json(userProfile);
+      } else {
+        res.status(404).json({ error: "User not found" });
+      }
     } else {
-      res.status(404).json({ error: "User not found" });
+      res.json(userProfile);
     }
   } catch (error) {
     console.error("Error fetching user profile:", error);
@@ -360,8 +510,8 @@ app.get("/user-profile", verifyToken, async (req, res) => {
   }
 });
 
-// Admin endpoint to initialize data
-app.get("/admin/init-data", async (req, res) => {
+// Admin endpoint to initialize data (rate limited)
+app.get("/admin/init-data", heavyLimiter, async (req, res) => {
   try {
     await initializeMenu();
     await initializeDishVotes();
@@ -372,12 +522,13 @@ app.get("/admin/init-data", async (req, res) => {
   }
 });
 
-// Remove duplicate /init-menu endpoint
-// app.get("/init-menu", ...) // Removed as it's redundant with /admin/init-data
-
-// Initialize data on server start
-initializeMenu();
-initializeDishVotes();
+// Initialize data on server start (only once)
+let initialized = false;
+if (!initialized) {
+  initializeMenu();
+  initializeDishVotes();
+  initialized = true;
+}
 
 const PORT = 5000;
 app.listen(PORT, () => {

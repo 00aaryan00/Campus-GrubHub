@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer
 } from 'recharts';
-import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw, Search, Coffee, Heart, ThumbsDown, Star, Calendar, Trophy } from 'lucide-react';
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
@@ -24,13 +24,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
+// Updated cafe theme colors for pie chart with more variety
+const PIE_COLORS = ['#8B4513', '#DAA520', '#CD853F', '#D2691E', '#B8860B', '#A0522D', '#DEB887', '#F4A460', '#BC8F8F', '#C19A6B'];
 
 const VoteAnalytics = () => {
   const [timeRange, setTimeRange] = useState('week');
   const [filterType, setFilterType] = useState('all');
-  const [showDebug, setShowDebug] = useState(false);
-const [searchTerm, setSearchTerm] = useState('');
+  
+  const [searchTerm, setSearchTerm] = useState('');
 
   // State for Firebase data
   const [voteData, setVoteData] = useState([]);
@@ -205,32 +206,36 @@ const [searchTerm, setSearchTerm] = useState('');
   const totalLikes = getFilteredData.filter(v => v.type === 'like').length;
   const totalDislikes = getFilteredData.filter(v => v.type === 'dislike').length;
 
-  // Loading state
+  // Loading state with cafe theme
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="animate-spin mx-auto mb-4" size={48} />
-          <p className="text-lg">Loading data from Firebase...</p>
+      <div className="cafe-container initial-loading">
+        <div className="loading-card">
+          <div className="loading-spinner-small"></div>
+          <p className="processing-text">Brewing your analytics...</p>
         </div>
       </div>
     );
   }
 
-  // Error state
+  // Error state with cafe theme
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-lg shadow">
-          <AlertCircle className="text-red-500 mx-auto mb-4" size={48} />
-          <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Data</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button 
-            onClick={fetchFirebaseData}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Try Again
-          </button>
+      <div className="cafe-container initial-loading">
+        <div className="menu-item-card" style={{maxWidth: '500px'}}>
+          <div className="text-center">
+            <AlertCircle size={48} style={{color: '#8B4513', margin: '0 auto 1rem'}} />
+            <h2 className="item-name" style={{marginBottom: '1rem'}}>Oops! Something went wrong</h2>
+            <p style={{color: '#6b7280', marginBottom: '1.5rem'}}>{error}</p>
+            <button 
+              onClick={fetchFirebaseData}
+              className="order-button"
+              style={{position: 'static', transform: 'none'}}
+            >
+              <RefreshCw size={16} className="mr-2" />
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -241,141 +246,111 @@ const [searchTerm, setSearchTerm] = useState('');
   const dailyTrends = trends();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-800">Aunty's Cafe Analytics</h1>
-            <p className="text-gray-600">Real-time customer preferences and voting data 🫖</p>
+    <div className="cafe-container">
+      {/* Smaller Header */}
+      <div className="cafe-header" style={{padding: '2rem 0'}}>
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <Coffee size={32} className="text-white" />
+            <h1 className="text-3xl font-bold text-white">Aunty's Cafe Analytics</h1>
+            <Coffee size={32} className="text-white" />
           </div>
-          <button 
-            onClick={fetchFirebaseData}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2"
-            disabled={loading}
-          >
-            <RefreshCw className={loading ? 'animate-spin' : ''} size={16} />
-            Refresh Data
-          </button>
-        </div>
-
-        {/* Debug Toggle */}
-        <div className="mb-4">
-          <button 
-            onClick={() => setShowDebug(!showDebug)}
-            className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 flex items-center gap-2"
-          >
-            <AlertCircle size={16} />
-            {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
-          </button>
-        </div>
-
-        {/* Debug Information */}
-        {showDebug && (
-          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6">
-            <h3 className="font-bold text-yellow-800 mb-2">Debug Information:</h3>
-            <div className="text-sm text-yellow-700 space-y-2">
-              <p><strong>Total Vote Records:</strong> {voteData.length}</p>
-              <p><strong>Filtered Vote Records:</strong> {getFilteredData.length}</p>
-              <p><strong>Dish Vote Records:</strong> {dishVoteData.length}</p>
-              <p><strong>Current Time Range:</strong> {timeRange}</p>
-              <p><strong>Current Filter Type:</strong> {filterType}</p>
-              
-              <div className="mt-3">
-                <strong>Sample Vote Data:</strong>
-                <pre className="bg-yellow-100 p-2 rounded mt-1 text-xs overflow-auto max-h-32">
-                  {JSON.stringify(voteData.slice(0, 3), null, 2)}
-                </pre>
-              </div>
-
-              <div className="mt-3">
-                <strong>Aggregated Dish Votes:</strong>
-                <pre className="bg-yellow-100 p-2 rounded mt-1 text-xs overflow-auto max-h-32">
-                  {JSON.stringify(dishVoteData.slice(0, 3), null, 2)}
-                </pre>
-              </div>
-            </div>
+          <p className="text-lg text-orange-100 mb-4">Discover what our customers love most ☕</p>
+          
+          <div className="flex justify-center gap-3">
+            <button 
+              onClick={fetchFirebaseData}
+              className="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-white text-sm"
+              disabled={loading}
+            >
+              <RefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} size={14} />
+              Refresh Data
+            </button>
+               
           </div>
-        )}
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-8">
+       
 
         {/* Filters */}
-        <div className="bg-white p-4 rounded-lg shadow mb-8 flex flex-wrap gap-4 items-center">
-          <Filter size={20} className="text-gray-600" />
-          <select 
-            value={timeRange} 
-            onChange={e => setTimeRange(e.target.value)}
-            className="border rounded px-3 py-2"
-          >
-            <option value="week">Last 7 days</option>
-            <option value="month">Last Month</option>
-            <option value="year">Last Year</option>
-            <option value="all">All Time</option>
-          </select>
+        <div className="menu-item-card mb-8">
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Calendar size={20} style={{color: '#8B4513'}} />
+              <select 
+                value={timeRange} 
+                onChange={e => setTimeRange(e.target.value)}
+                className="feedback-input"
+                style={{minWidth: '150px'}}
+              >
+                <option value="week">Last 7 days</option>
+                <option value="month">Last Month</option>
+                <option value="year">Last Year</option>
+                <option value="all">All Time</option>
+              </select>
+            </div>
 
-          <TrendingUp size={20} className="text-gray-600" />
-          <select 
-            value={filterType} 
-            onChange={e => setFilterType(e.target.value)}
-            className="border rounded px-3 py-2"
-          >
-            <option value="all">All Votes</option>
-            <option value="likes">Likes Only</option>
-            <option value="dislikes">Dislikes Only</option>
-          </select>
+            <div className="flex items-center gap-2">
+              <Filter size={20} style={{color: '#8B4513'}} />
+              <select 
+                value={filterType} 
+                onChange={e => setFilterType(e.target.value)}
+                className="feedback-input"
+                style={{minWidth: '150px'}}
+              >
+                <option value="all">All Votes</option>
+                <option value="likes">Likes Only</option>
+                <option value="dislikes">Dislikes Only</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600">Total Votes</p>
-                <h2 className="text-3xl font-bold">{total}</h2>
-              </div>
-              <Users size={32} className="text-blue-600" />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="menu-item-card text-center">
+            <Users size={32} style={{color: '#8B4513', margin: '0 auto 1rem'}} />
+            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Total Votes</h3>
+            <div className="item-price" style={{margin: 0}}>{total}</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600">Total Likes</p>
-                <h2 className="text-3xl font-bold text-green-600">{totalLikes}</h2>
-              </div>
-              <span className="text-green-600 text-3xl">👍</span>
-            </div>
+          <div className="menu-item-card text-center">
+            <Heart size={32} style={{color: '#16a34a', margin: '0 auto 1rem'}} />
+            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Total Likes</h3>
+            <div className="item-price" style={{margin: 0, color: '#16a34a'}}>{totalLikes}</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600">Total Dislikes</p>
-                <h2 className="text-3xl font-bold text-red-600">{totalDislikes}</h2>
-              </div>
-              <span className="text-red-600 text-3xl">👎</span>
-            </div>
+          <div className="menu-item-card text-center">
+            <ThumbsDown size={32} style={{color: '#dc2626', margin: '0 auto 1rem'}} />
+            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Total Dislikes</h3>
+            <div className="item-price" style={{margin: 0, color: '#dc2626'}}>{totalDislikes}</div>
           </div>
           
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600">Like Rate</p>
-                <h2 className="text-3xl font-bold text-purple-600">
-                  {total > 0 ? ((totalLikes / total) * 100).toFixed(1) : 0}%
-                </h2>
-              </div>
-              <Award size={32} className="text-purple-600" />
+          <div className="menu-item-card text-center">
+            <Award size={32} style={{color: '#DAA520', margin: '0 auto 1rem'}} />
+            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Like Rate</h3>
+            <div className="item-price" style={{margin: 0, color: '#DAA520'}}>
+              {total > 0 ? ((totalLikes / total) * 100).toFixed(1) : 0}%
             </div>
           </div>
         </div>
 
         {/* Top Item Highlight */}
         {topItem && (
-          <div className="bg-gradient-to-r from-orange-400 to-orange-600 text-white p-6 rounded-lg shadow mb-8">
+          <div className="menu-item-card mb-8" style={{
+            background: 'linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #CD853F 100%)',
+            color: 'white',
+            borderLeft: '4px solid #DAA520'
+          }}>
             <div className="flex items-center gap-4">
-              <span className="text-4xl">🏆</span>
+              <Trophy size={48} style={{color: '#DAA520'}} />
               <div>
-                <h2 className="text-2xl font-bold">Most Popular: {topItem.item}</h2>
-                <p className="text-orange-100">
+                <h2 className="item-name" style={{color: 'white', marginBottom: '0.5rem'}}>
+                  🏆 Most Popular: {topItem.item}
+                </h2>
+                <p style={{color: '#fed7aa', fontSize: '1.1rem'}}>
                   {topItem.likes} likes • {topItem.dislikes} dislikes • {topItem.ratio.toFixed(1)}% positive
                 </p>
               </div>
@@ -384,37 +359,46 @@ const [searchTerm, setSearchTerm] = useState('');
         )}
 
         {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Votes per Item Chart */}
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-semibold mb-4">Votes per Item</h3>
+          <div className="menu-item-card">
+            <h3 className="item-name mb-4">📊 Votes per Item</h3>
             {counts.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={counts.slice(0, 10)}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#DEB887" />
                   <XAxis 
                     dataKey="item" 
                     angle={-45} 
                     textAnchor="end" 
                     height={100}
                     fontSize={12}
+                    stroke="#8B4513"
                   />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="likes" fill="#22c55e" name="Likes" />
-                  <Bar dataKey="dislikes" fill="#ef4444" name="Dislikes" />
+                  <YAxis stroke="#8B4513" />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      border: '2px solid #8B4513',
+                      borderRadius: '0.75rem',
+                      color: '#8B4513'
+                    }}
+                  />
+                  <Bar dataKey="likes" fill="#16a34a" name="Likes" />
+                  <Bar dataKey="dislikes" fill="#dc2626" name="Dislikes" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                No voting data available
+              <div className="empty-state" style={{height: '300px'}}>
+                <div className="empty-icon">📈</div>
+                <div className="empty-title">No voting data available</div>
               </div>
             )}
           </div>
 
-          {/* Popular Items Pie Chart */}
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-semibold mb-4">Popular Items Distribution</h3>
+          {/* Popular Items Pie Chart with varied colors */}
+          <div className="menu-item-card">
+            <h3 className="item-name mb-4">🥧 Popular Items Distribution</h3>
             {counts.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -427,137 +411,103 @@ const [searchTerm, setSearchTerm] = useState('');
                     label={({ item, percent }) => `${item} (${(percent * 100).toFixed(0)}%)`}
                   >
                     {counts.slice(0, 6).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value, name, props) => [value, props.payload.item]} />
+                  <Tooltip 
+                    formatter={(value, name, props) => [value, props.payload.item]}
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      border: '2px solid #8B4513',
+                      borderRadius: '0.75rem',
+                      color: '#8B4513'
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                No voting data available
+              <div className="empty-state" style={{height: '300px'}}>
+                <div className="empty-icon">🥧</div>
+                <div className="empty-title">No distribution data available</div>
               </div>
             )}
           </div>
         </div>
 
         {/* Daily Trends Chart */}
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <h3 className="text-xl font-semibold mb-4">Daily Voting Trends</h3>
+        <div className="menu-item-card mb-8">
+          <h3 className="item-name mb-4">📈 Daily Voting Trends</h3>
           {dailyTrends.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={dailyTrends}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#DEB887" />
                 <XAxis 
                   dataKey="date" 
                   tickFormatter={date => new Date(date).toLocaleDateString('en-US', { 
                     month: 'short', 
                     day: 'numeric' 
                   })}
+                  stroke="#8B4513"
                 />
-                <YAxis />
+                <YAxis stroke="#8B4513" />
                 <Tooltip 
                   labelFormatter={date => new Date(date).toLocaleDateString('en-US', { 
                     weekday: 'long', 
                     month: 'long', 
                     day: 'numeric' 
                   })}
+                  contentStyle={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    border: '2px solid #8B4513',
+                    borderRadius: '0.75rem',
+                    color: '#8B4513'
+                  }}
                 />
-                <Line type="monotone" dataKey="likes" stroke="#22c55e" name="Likes" strokeWidth={2} />
-                <Line type="monotone" dataKey="dislikes" stroke="#ef4444" name="Dislikes" strokeWidth={2} />
+                <Line type="monotone" dataKey="likes" stroke="#16a34a" name="Likes" strokeWidth={3} />
+                <Line type="monotone" dataKey="dislikes" stroke="#dc2626" name="Dislikes" strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-500">
-              No trend data available
+            <div className="empty-state" style={{height: '300px'}}>
+              <div className="empty-icon">📈</div>
+              <div className="empty-title">No trend data available</div>
             </div>
           )}
         </div>
 
-        {/* Aggregated Dish Statistics */}
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
-    <div className="flex justify-between items-center mb-4">
-      <h3 className="text-xl font-semibold">Aggregated Dish Statistics</h3>
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
-        </div>
-        <input
-          type="text"
-          placeholder="Search dishes..."
-          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-    </div>
-    {dishVoteData.length > 0 ? (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dishVoteData
-          .filter(dish => 
-            dish.item.toLowerCase().includes(searchTerm.toLowerCase())
-          )
-          .sort((a, b) => (b.likes + b.dislikes) - (a.likes + a.dislikes))
-          .map((dish) => (
-          <div key={dish.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
-            <h4 className="font-semibold text-lg mb-3">{dish.item}</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-green-600">👍 Likes:</span>
-                <span className="font-semibold">{dish.likes}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-red-600">👎 Dislikes:</span>
-                <span className="font-semibold">{dish.dislikes}</span>
-              </div>
-              <div className="flex justify-between border-t pt-2">
-                <span className="text-gray-600">📊 Total:</span>
-                <span className="font-semibold">{dish.likes + dish.dislikes}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-purple-600">📈 Like Rate:</span>
-                <span className="font-semibold">
-                  {dish.likes + dish.dislikes > 0 
-                    ? ((dish.likes / (dish.likes + dish.dislikes)) * 100).toFixed(1)
-                    : 0}%
-                </span>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Last Updated: {dish.lastUpdated.toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : (
-      <p className="text-gray-500 text-center py-8">No aggregated dish data available</p>
-    )}
-  </div>
-
-        {/* All Cafe Items Overview */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">All Cafe Items Overview</h3>
+        {/* Filtered Items Overview */}
+        <div className="menu-item-card mb-8">
+          <h3 className="item-name mb-6">☕ Filtered Items Overview ({timeRange})</h3>
           
           {counts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {counts.map((item, index) => {
                 const dishStats = dishVoteData.find(d => d.item.toLowerCase() === item.item.toLowerCase());
                 
                 return (
-                  <div key={index} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
-                    <h4 className="font-semibold text-lg mb-2">{item.item}</h4>
+                  <div key={index} className="p-4 rounded-lg border-2 border-amber-200" style={{
+                    background: 'linear-gradient(135deg, #FFF8DC 0%, #FFFACD 100%)'
+                  }}>
+                    <h4 className="font-bold text-amber-800 text-lg mb-3 truncate" title={item.item}>{item.item}</h4>
                     
-                    <div className="space-y-1">
-                      <p className="text-sm">
-                        👍 {item.likes} • 👎 {item.dislikes} • {item.ratio.toFixed(1)}% positive
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        From filtered votes ({timeRange})
-                      </p>
+                    <div className="space-y-2">
+                      <div className="text-sm text-amber-700 font-semibold">Current Period:</div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-green-600">👍 {item.likes}</span>
+                        <span className="text-red-600">👎 {item.dislikes}</span>
+                        <span className="text-yellow-600">{item.ratio.toFixed(1)}% ❤️</span>
+                      </div>
+                      
                       {dishStats && (
-                        <p className="text-xs text-gray-500 border-t pt-1 mt-2">
-                          All-time: {dishStats.likes}👍 {dishStats.dislikes}👎
-                        </p>
+                        <>
+                          <div className="border-t border-amber-300 pt-2 mt-2">
+                            <div className="text-xs text-amber-700 font-semibold mb-1">All-time:</div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-green-600">👍 {dishStats.likes}</span>
+                              <span className="text-red-600">👎 {dishStats.dislikes}</span>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -565,9 +515,79 @@ const [searchTerm, setSearchTerm] = useState('');
               })}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-8">
-              No cafe items found with votes in the selected time range
-            </p>
+            <div className="empty-state">
+              <div className="empty-icon">☕</div>
+              <div className="empty-title">No items found</div>
+              <div className="empty-subtitle">
+                No cafe items have votes in the selected time range. Try expanding your filter!
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* All-Time Dish Statistics with Search */}
+        <div className="menu-item-card">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <h3 className="item-name">🍽️ All-Time Dish Statistics</h3>
+            <div className="flex items-center gap-2">
+              <Search size={20} style={{color: '#8B4513'}} />
+              <input
+                type="text"
+                placeholder="Search dishes..."
+                className="feedback-input"
+                style={{minWidth: '200px'}}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          {dishVoteData.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {dishVoteData
+                .filter(dish => 
+                  dish.item.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .sort((a, b) => (b.likes + b.dislikes) - (a.likes + a.dislikes))
+                .map((dish) => (
+                <div key={dish.id} className="p-4 rounded-lg border-2 border-amber-200" style={{
+                  background: 'linear-gradient(135deg, #FFF8DC 0%, #FFFACD 100%)'
+                }}>
+                  <h4 className="font-bold text-amber-800 text-lg mb-3 truncate" title={dish.item}>{dish.item}</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-green-600 font-semibold text-sm">👍 Likes:</span>
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-bold">{dish.likes}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-600 font-semibold text-sm">👎 Dislikes:</span>
+                      <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-bold">{dish.dislikes}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-amber-300 pt-2">
+                      <span className="text-amber-700 font-semibold text-sm">📊 Total:</span>
+                      <span className="font-bold text-amber-800">{dish.likes + dish.dislikes}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-yellow-600 font-semibold text-sm">📈 Like Rate:</span>
+                      <span className="font-bold text-yellow-700">
+                        {dish.likes + dish.dislikes > 0 
+                          ? ((dish.likes / (dish.likes + dish.dislikes)) * 100).toFixed(1)
+                          : 0}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-2 border-t border-amber-200 pt-2">
+                      Last Updated: {dish.lastUpdated.toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">🍽️</div>
+              <div className="empty-title">No dish statistics available</div>
+              <div className="empty-subtitle">Start voting to see analytics here!</div>
+            </div>
           )}
         </div>
       </div>

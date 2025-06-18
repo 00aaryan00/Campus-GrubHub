@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
+import "./AuntysCafe.css";
 
 export default function AuntysCafe() {
   const [menu, setMenu] = useState([]);
@@ -131,102 +132,115 @@ export default function AuntysCafe() {
   };
 
   const formatTimestamp = (timestamp) => {
-  if (!timestamp) return "Just now";
-  
-  // Handle Firebase Timestamp objects
-  if (timestamp.toDate) {
-    return timestamp.toDate().toLocaleString();
-  }
-  
-  // Handle ISO string timestamps
-  if (typeof timestamp === 'string') {
+    if (!timestamp) return "Just now";
+    
+    // Handle Firebase Timestamp objects
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleString();
+    }
+    
+    // Handle ISO string timestamps
+    if (typeof timestamp === 'string') {
+      const date = new Date(timestamp);
+      return isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
+    }
+    
+    // Handle regular date objects
     const date = new Date(timestamp);
     return isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
-  }
-  
-  // Handle regular date objects
-  const date = new Date(timestamp);
-  return isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
-};
+  };
 
   if (loading && menu.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="initial-loading">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading menu...</p>
+          <div className="loading-spinner"></div>
+          <p className="loading-text">Loading menu...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="cafe-container">
       {/* Loading Overlay - Fixed z-index and visibility */}
       {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="text-gray-700">Processing...</span>
+        <div className="loading-overlay">
+          <div className="loading-card">
+            <div className="loading-spinner-small"></div>
+            <span className="processing-text">Processing...</span>
           </div>
         </div>
       )}
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-10 right-4 space-y-2 z-10">
+      <div className="floating-buttons">
         <Link to="/auntys-cafe/preorder">
-          <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center">
-            <span>Order Now</span>
+          <button className="order-button">
+            <span className="mr-2">🛒</span>
+            Order Now
           </button>
         </Link>
         <Link to="/my-orders">
-          <button className="bg-yellow-400 hover:bg-yellow-500 text-gray-800 px-4 py-2 rounded-full shadow-lg flex items-center">
-            <span>Your Orders</span>
+          <button className="orders-button">
+            <span className="mr-2">📋</span>
+            Your Orders
           </button>
         </Link>
       </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Today's Special Menu</h1>
-          <div className="flex space-x-2">
+      {/* Header with Cafe Branding */}
+      <div className="cafe-header">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-6">
+            <h1 className="cafe-title">☕ Aunty's Cafe</h1>
+            <p className="cafe-subtitle">Today's Special Menu - Homemade goodness, served with love</p>
+          </div>
+          
+          <div className="header-buttons">
             <button
               onClick={() => navigate("/analytics")}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+              className="header-button"
             >
               📊 View Stats
             </button>
             <button
               onClick={() => navigate("/admin-login")}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+              className="header-button"
             >
-              Admin Login
+              👤 Admin Login
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8">
+        {/* Navigation Tabs */}
+        <div className="tab-container">
+          <div className="tab-wrapper">
+            <button
+              className={`tab-button ${activeTab === 'menu' ? 'tab-active' : 'tab-inactive'}`}
+              onClick={() => setActiveTab('menu')}
+            >
+              🍽️ Menu Items
+            </button>
+            <button
+              className={`tab-button ${activeTab === 'feedback' ? 'tab-active' : 'tab-inactive'}`}
+              onClick={() => setActiveTab('feedback')}
+            >
+              💬 All Feedback
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b mb-6">
-          <button
-            className={`px-4 py-2 font-medium ${activeTab === 'menu' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
-            onClick={() => setActiveTab('menu')}
-          >
-            Menu Items
-          </button>
-          <button
-            className={`px-4 py-2 font-medium ${activeTab === 'feedback' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
-            onClick={() => setActiveTab('feedback')}
-          >
-            All Feedback
-          </button>
-        </div>
-
         {activeTab === 'menu' ? (
-          <div className="grid gap-6">
+          <div className="menu-grid">
             {menu.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No items available currently.
+              <div className="empty-state">
+                <div className="empty-icon">☕</div>
+                <p className="empty-title">No items available currently.</p>
+                <p className="empty-subtitle">Please check back later for our delicious offerings!</p>
               </div>
             )}
 
@@ -236,68 +250,83 @@ export default function AuntysCafe() {
               const dishVotes = votes[dishId] || { likes: 0, dislikes: 0, comments: [] };
 
               return (
-                <div key={index} className="bg-white rounded-lg shadow-md p-6">
-                  <div className="flex justify-between items-start">
+                <div key={index} className="menu-item-card">
+                  <div className="menu-item-header">
                     <div>
-                      <h3 className="text-xl font-semibold text-gray-800">
-                        {item.name} - ₹{item.price}
+                      <h3 className="item-name">
+                        {item.name}
                       </h3>
-                      <div className="flex items-center mt-1 space-x-2 text-sm">
-                        <span className={`px-2 py-1 rounded-full ${item.veg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                          {item.veg ? "Veg" : "Non-Veg"}
+                      <div className="item-price">
+                        ₹{item.price}
+                      </div>
+                      <div className="item-tags">
+                        <span className={`tag ${item.veg ? 'tag-veg' : 'tag-non-veg'}`}>
+                          {item.veg ? "🥬 Veg" : "🍖 Non-Veg"}
                         </span>
-                        <span className={`px-2 py-1 rounded-full ${item.available ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
-                          {item.available ? "Available" : "Unavailable"}
+                        <span className={`tag ${item.available ? 'tag-available' : 'tag-unavailable'}`}>
+                          {item.available ? "✅ Available" : "❌ Sold Out"}
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-green-600">👍 {dishVotes.likes}</span>
-                      <span className="text-red-600">👎 {dishVotes.dislikes}</span>
+                    <div className="votes-display">
+                      <div className="vote-stats">
+                        <span className="like-count">
+                          <span className="mr-1">👍</span> {dishVotes.likes}
+                        </span>
+                        <span className="dislike-count">
+                          <span className="mr-1">👎</span> {dishVotes.dislikes}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex space-x-2">
+                  {/* Voting Buttons */}
+                  <div className="voting-buttons">
                     <button
                       onClick={() => handleVote(item.name, "like")}
                       disabled={userHasVoted || loading}
-                      className={`px-3 py-1 rounded ${userHasVoted || loading ? 'bg-gray-200 cursor-not-allowed' : 'bg-green-100 hover:bg-green-200 text-green-800'}`}
+                      className={`vote-button ${userHasVoted || loading ? 'vote-disabled' : 'vote-like'}`}
                     >
                       👍 {userHasVoted && userVotes[dishId]?.type === 'like' ? 'Liked' : 'Like'}
                     </button>
                     <button
                       onClick={() => handleVote(item.name, "dislike")}
                       disabled={userHasVoted || loading}
-                      className={`px-3 py-1 rounded ${userHasVoted || loading ? 'bg-gray-200 cursor-not-allowed' : 'bg-red-100 hover:bg-red-200 text-red-800'}`}
+                      className={`vote-button ${userHasVoted || loading ? 'vote-disabled' : 'vote-dislike'}`}
                     >
                       👎 {userHasVoted && userVotes[dishId]?.type === 'dislike' ? 'Disliked' : 'Dislike'}
                     </button>
                   </div>
 
-                  <div className="mt-4">
-                    <div className="flex">
+                  {/* Feedback Input */}
+                  <div className="feedback-input-container">
+                    <div className="feedback-input-wrapper">
                       <input
                         type="text"
-                        placeholder="Leave your feedback..."
+                        placeholder="Share your thoughts about this dish..."
                         value={feedbacks[item.name] || ""}
                         onChange={(e) => setFeedbacks({ ...feedbacks, [item.name]: e.target.value })}
                         disabled={loading}
-                        className="flex-1 border rounded-l-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                        className="feedback-input"
                       />
                       <button
                         onClick={() => handleFeedback(item.name)}
                         disabled={loading || !feedbacks[item.name]?.trim()}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg disabled:bg-gray-400"
+                        className="feedback-submit"
                       >
                         Submit
                       </button>
                     </div>
                   </div>
 
+                  {/* Recent Comments */}
                   {dishVotes.comments?.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-medium text-gray-700 mb-2">Recent Feedback:</h4>
-                      <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                    <div>
+                      <h4 className="comments-title">
+                        <span className="mr-2">💭</span>
+                        Recent Feedback:
+                      </h4>
+                      <div className="comments-container">
                         {dishVotes.comments
                           .sort((a, b) => {
                             const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
@@ -306,10 +335,10 @@ export default function AuntysCafe() {
                           })
                           .slice(0, 3)
                           .map((commentObj, idx) => (
-                            <div key={`${commentObj.userId}-${idx}`} className="bg-gray-50 p-3 rounded-lg">
-                              <p className="text-gray-800 italic">"{commentObj.comment}"</p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                - {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} • {formatTimestamp(commentObj.timestamp)}
+                            <div key={`${commentObj.userId}-${idx}`} className="comment-card">
+                              <p className="comment-text">"{commentObj.comment}"</p>
+                              <p className="comment-meta">
+                                — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} • {formatTimestamp(commentObj.timestamp)}
                               </p>
                             </div>
                           ))}
@@ -317,9 +346,9 @@ export default function AuntysCafe() {
                       {dishVotes.comments.length > 3 && (
                         <button
                           onClick={() => setActiveTab('feedback')}
-                          className="text-blue-600 text-sm mt-2 hover:underline"
+                          className="view-all-button"
                         >
-                          View all {dishVotes.comments.length} feedbacks
+                          View all {dishVotes.comments.length} feedbacks →
                         </button>
                       )}
                     </div>
@@ -329,51 +358,69 @@ export default function AuntysCafe() {
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">All Feedback</h2>
-            {menu.length === 0 ? (
-              <p className="text-gray-500">No menu items available to show feedback.</p>
-            ) : (
-              <div className="space-y-6">
-                {menu
-                  .filter(item => {
+          <div className="feedback-section">
+            <div className="feedback-container">
+              <h2 className="feedback-title">
+                <span className="mr-3">💬</span>
+                All Customer Feedback
+              </h2>
+              
+              {menu.length === 0 ? (
+                <div className="empty-feedback-state">
+                  <div className="empty-icon">☕</div>
+                  <p className="empty-title">No menu items available to show feedback.</p>
+                  <p className="empty-subtitle">Please check back later!</p>
+                </div>
+              ) : (
+                <div className="feedback-items">
+                  {menu
+                    .filter(item => {
+                      const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
+                      return dishVotes.comments?.length > 0;
+                    })
+                    .map((item) => {
+                      const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
+                      return (
+                        <div key={item.name} className="feedback-item">
+                          <h3 className="feedback-dish-name">
+                            {item.name}
+                            <span className="feedback-count">
+                              ({dishVotes.comments.length} feedback{dishVotes.comments.length !== 1 ? 's' : ''})
+                            </span>
+                          </h3>
+                          <div className="feedback-comments">
+                            {dishVotes.comments
+                              .sort((a, b) => {
+                                const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+                                const bTime = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+                                return bTime - aTime;
+                              })
+                              .map((commentObj, idx) => (
+                                <div key={`${commentObj.userId}-${idx}`} className="feedback-comment-card">
+                                  <p className="feedback-comment-text">"{commentObj.comment}"</p>
+                                  <p className="feedback-comment-meta">
+                                    — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} • {formatTimestamp(commentObj.timestamp)}
+                                  </p>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  
+                  {menu.filter(item => {
                     const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
                     return dishVotes.comments?.length > 0;
-                  })
-                  .map((item) => {
-                    const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
-                    return (
-                      <div key={item.name} className="border-b pb-4 last:border-b-0">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                          {item.name} ({dishVotes.comments.length} feedback{dishVotes.comments.length !== 1 ? 's' : ''})
-                        </h3>
-                        <div className="space-y-3">
-                          {dishVotes.comments
-                            .sort((a, b) => {
-                              const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
-                              const bTime = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
-                              return bTime - aTime;
-                            })
-                            .map((commentObj, idx) => (
-                              <div key={`${commentObj.userId}-${idx}`} className="bg-gray-50 p-3 rounded-lg">
-                                <p className="text-gray-800">"{commentObj.comment}"</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  - {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} • {formatTimestamp(commentObj.timestamp)}
-                                </p>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                {menu.filter(item => {
-                  const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
-                  return dishVotes.comments?.length > 0;
-                }).length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No feedback available yet. Be the first to leave feedback!</p>
-                )}
-              </div>
-            )}
+                  }).length === 0 && (
+                    <div className="no-feedback-state">
+                      <div className="empty-icon">☕</div>
+                      <p className="empty-title">No feedback available yet!</p>
+                      <p className="empty-subtitle">Be the first to share your thoughts about our delicious food.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

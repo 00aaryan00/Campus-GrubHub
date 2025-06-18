@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Calendar, TrendingUp, Users, Award, Filter } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import './Stats.css';
 
 const fetchVoteData = async () => {
   try {
@@ -30,7 +31,7 @@ const fetchMenuData = async () => {
   }
 };
 
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
+const COLORS = ['#4CAF50', '#FF5722', '#FFC107', '#03A9F4', '#8BC34A'];
 
 const DAYS_OF_WEEK = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
@@ -212,65 +213,67 @@ const VoteAnalytics = () => {
 
   // Get menu items for selected day
   const getMenuForDay = (day) => {
-  if (!day) return [];
-  
-  // Find the weekly menu document
-  const weeklyMenu = menuData.find(menu => menu.id === 'weekly' || menu.weekly);
-  
-  if (weeklyMenu) {
-    // Check for day-specific data in the weekly document
+    if (!day) return [];
+    
+    // Find the weekly menu document
+    const weeklyMenu = menuData.find(menu => menu.id === 'weekly' || menu.weekly);
+    
+    if (weeklyMenu) {
+      // Check for day-specific data in the weekly document
+      const dayLower = day.toLowerCase();
+      
+      // Look for the day as a field in the weekly document
+      if (weeklyMenu[dayLower]) {
+        // If it's an object with breakfast/dinner, extract all items
+        if (typeof weeklyMenu[dayLower] === 'object' && !Array.isArray(weeklyMenu[dayLower])) {
+          let allItems = [];
+          Object.keys(weeklyMenu[dayLower]).forEach(mealType => {
+            const mealItems = weeklyMenu[dayLower][mealType];
+            if (Array.isArray(mealItems)) {
+              allItems = [...allItems, ...mealItems];
+            }
+          });
+          return allItems.filter(item => item && item.trim() !== '');
+        }
+        // If it's already an array, return it directly
+        else if (Array.isArray(weeklyMenu[dayLower])) {
+          return weeklyMenu[dayLower].filter(item => item && item.trim() !== '');
+        }
+      }
+      
+      // Also check for capitalized day names
+      if (weeklyMenu[day]) {
+        if (typeof weeklyMenu[day] === 'object' && !Array.isArray(weeklyMenu[day])) {
+          let allItems = [];
+          Object.keys(weeklyMenu[day]).forEach(mealType => {
+            const mealItems = weeklyMenu[day][mealType];
+            if (Array.isArray(mealItems)) {
+              allItems = [...allItems, ...mealItems];
+            }
+          });
+          return allItems.filter(item => item && item.trim() !== '');
+        }
+        else if (Array.isArray(weeklyMenu[day])) {
+          return weeklyMenu[day].filter(item => item && item.trim() !== '');
+        }
+      }
+    }
+    
+    // Also check if there's a direct document for the day
     const dayLower = day.toLowerCase();
+    const dayMenu = menuData.find(menu => 
+      menu.id === dayLower || 
+      (menu.day && menu.day.toLowerCase() === dayLower)
+    );
     
-    // Look for the day as a field in the weekly document
-    if (weeklyMenu[dayLower]) {
-      // If it's an object with breakfast/dinner, extract all items
-      if (typeof weeklyMenu[dayLower] === 'object' && !Array.isArray(weeklyMenu[dayLower])) {
-        let allItems = [];
-        Object.keys(weeklyMenu[dayLower]).forEach(mealType => {
-          const mealItems = weeklyMenu[dayLower][mealType];
-          if (Array.isArray(mealItems)) {
-            allItems = [...allItems, ...mealItems];
-          }
-        });
-        return allItems.filter(item => item && item.trim() !== '');
-      }
-      // If it's already an array, return it directly
-      else if (Array.isArray(weeklyMenu[dayLower])) {
-        return weeklyMenu[dayLower].filter(item => item && item.trim() !== '');
-      }
+    if (dayMenu && dayMenu.items) {
+      return Array.isArray(dayMenu.items) ? 
+        dayMenu.items.filter(item => item && item.trim() !== '') : [];
     }
     
-    // Also check for capitalized day names
-    if (weeklyMenu[day]) {
-      if (typeof weeklyMenu[day] === 'object' && !Array.isArray(weeklyMenu[day])) {
-        let allItems = [];
-        Object.keys(weeklyMenu[day]).forEach(mealType => {
-          const mealItems = weeklyMenu[day][mealType];
-          if (Array.isArray(mealItems)) {
-            allItems = [...allItems, ...mealItems];
-          }
-        });
-        return allItems.filter(item => item && item.trim() !== '');
-      }
-      else if (Array.isArray(weeklyMenu[day])) {
-        return weeklyMenu[day].filter(item => item && item.trim() !== '');
-      }
-    }
-  }
-  
-  // Also check if there's a direct document for the day
-  const dayMenu = menuData.find(menu => 
-    menu.id === dayLower || 
-    (menu.day && menu.day.toLowerCase() === dayLower)
-  );
-  
-  if (dayMenu && dayMenu.items) {
-    return Array.isArray(dayMenu.items) ? 
-      dayMenu.items.filter(item => item && item.trim() !== '') : [];
-  }
-  
-  return [];
-};
+    return [];
+  };
+
   const voteCounts = getVoteCountsByItem();
   const mostLiked = getMostLikedMeal();
   const dailyTrends = getDailyTrends();
@@ -282,10 +285,14 @@ const VoteAnalytics = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-xl text-gray-600">Loading dashboard...</div>
+      <div className="statsWrapper">
+        <div className="analytics-container">
+          <div className="loading-container">
+            <div className="loading-card">
+              <div className="loading-spinner"></div>
+              <div className="loading-text">Loading Analytics Dashboard...</div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -293,265 +300,305 @@ const VoteAnalytics = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center bg-white rounded-lg shadow-lg p-8">
-          <div className="text-red-600 text-xl mb-4">⚠️ Error Loading Data</div>
-          <div className="text-gray-600 mb-4">{error}</div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Retry
-          </button>
+      <div className="statsWrapper">
+        <div className="analytics-container">
+          <div className="loading-container">
+            <div className="error-card">
+              <div className="error-content">
+                <div className="error-icon">⚠️</div>
+                <div className="error-details">
+                  <div className="error-title">Error Loading Data</div>
+                  <div className="error-message">{error}</div>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="error-refresh-btn"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Vote Analytics Dashboard</h1>
-          <p className="text-gray-600">Analyze voting patterns and meal preferences</p>
-        </div>
-
-        {/* Filter Controls */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Calendar className="text-blue-600" size={20} />
-              <select 
-                value={selectedDay} 
-                onChange={(e) => setSelectedDay(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
-              >
-                <option value="">Select a day</option>
-                {availableDays.map((day) => (
-                  <option key={day} value={day}>
-                    {day}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Filter className="text-green-600" size={20} />
-              <select 
-                value={timeRange} 
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="week">Last Week</option>
-                <option value="month">Last Month</option>
-                <option value="year">Last Year</option>
-                <option value="all">All Time</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <TrendingUp className="text-purple-600" size={20} />
-              <select 
-                value={filterType} 
-                onChange={(e) => setFilterType(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="all">All Votes</option>
-                <option value="likes">Likes Only</option>
-                <option value="dislikes">Dislikes Only</option>
-              </select>
-            </div>
+    <div className="statsWrapper">
+      <div className="analytics-container">
+        <div className="analytics-content">
+          <div className="analytics-header">
+            <h1 className="analytics-title">📊 Vote Analytics Dashboard</h1>
+            <p className="analytics-subtitle">Analyze voting patterns and meal preferences</p>
           </div>
-        </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Total Votes</p>
-                <p className="text-2xl font-bold text-gray-800">{totalVotes}</p>
+          {/* Filter Controls */}
+          <div className="filter-panel">
+            <div className="filter-controls">
+              <div className="filter-group">
+                <Calendar className="filter-icon" size={20} />
+                <select 
+                  value={selectedDay} 
+                  onChange={(e) => setSelectedDay(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="">Select a day</option>
+                  {availableDays.map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <Users className="text-blue-600" size={32} />
+
+              <div className="filter-group">
+                <Filter className="filter-icon" size={20} />
+                <select 
+                  value={timeRange} 
+                  onChange={(e) => setTimeRange(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="week">Last Week</option>
+                  <option value="month">Last Month</option>
+                  <option value="year">Last Year</option>
+                  <option value="all">All Time</option>
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <TrendingUp className="filter-icon" size={20} />
+                <select 
+                  value={filterType} 
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="all">All Votes</option>
+                  <option value="likes">Likes Only</option>
+                  <option value="dislikes">Dislikes Only</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Total Likes</p>
-                <p className="text-2xl font-bold text-green-600">{totalLikes}</p>
+          {/* Summary Cards */}
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-content">
+                <div className="stat-info">
+                  <p className="stat-label">Total Votes</p>
+                  <p className="stat-value">{totalVotes}</p>
+                </div>
+                <Users className="stat-icon" size={24} />
               </div>
-              <div className="text-green-600 text-2xl">👍</div>
+            </div>
+
+            <div className="stat-card likes-card">
+              <div className="stat-content">
+                <div className="stat-info">
+                  <p className="stat-label">Total Likes</p>
+                  <p className="stat-value likes-value">{totalLikes}</p>
+                </div>
+                <div className="stat-emoji">👍</div>
+              </div>
+            </div>
+
+            <div className="stat-card dislikes-card">
+              <div className="stat-content">
+                <div className="stat-info">
+                  <p className="stat-label">Total Dislikes</p>
+                  <p className="stat-value dislikes-value">{totalDislikes}</p>
+                </div>
+                <div className="stat-emoji">👎</div>
+              </div>
+            </div>
+
+            <div className="stat-card rate-card">
+              <div className="stat-content">
+                <div className="stat-info">
+                  <p className="stat-label">Like Rate</p>
+                  <p className="stat-value rate-value">
+                    {totalVotes > 0 ? ((totalLikes / totalVotes) * 100).toFixed(1) : 0}%
+                  </p>
+                </div>
+                <Award className="stat-icon" size={24} />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Total Dislikes</p>
-                <p className="text-2xl font-bold text-red-600">{totalDislikes}</p>
+          {/* Most Liked Item Card */}
+          {mostLiked && (
+            <div className="most-liked-card">
+              <div className="most-liked-content">
+                <div className="most-liked-info">
+                  <p className="most-liked-label">Most Liked Item</p>
+                  <p className="most-liked-name">{mostLiked.item}</p>
+                  <p className="most-liked-stats">{mostLiked.likes} likes • {mostLiked.ratio.toFixed(1)}% positive</p>
+                </div>
+                <Award className="most-liked-icon" size={24} />
               </div>
-              <div className="text-red-600 text-2xl">👎</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Like Rate</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {totalVotes > 0 ? ((totalLikes / totalVotes) * 100).toFixed(1) : 0}%
-                </p>
-              </div>
-              <Award className="text-purple-600" size={32} />
-            </div>
-          </div>
-        </div>
-
-        {/* Most Liked Item Card */}
-        {mostLiked && (
-          <div className="bg-gradient-to-r from-orange-400 to-orange-600 rounded-xl shadow-lg p-6 mb-8 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-orange-100 mb-1">🏆 Most Liked Item</p>
-                <p className="text-2xl font-bold">{mostLiked.item}</p>
-                <p className="text-orange-100">{mostLiked.likes} likes • {mostLiked.ratio.toFixed(1)}% positive</p>
-              </div>
-              <Award className="text-orange-200" size={48} />
-            </div>
-          </div>
-        )}
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">Vote Counts by Item</h3>
-            {voteCounts.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={voteCounts.slice(0, 10)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="item" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={100}
-                    fontSize={12}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="likes" fill="#22c55e" name="Likes" />
-                  <Bar dataKey="dislikes" fill="#ef4444" name="Dislikes" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[300px] text-gray-500">
-                No vote data available for the selected filters
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">Most Popular Items</h3>
-            {voteCounts.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={voteCounts.slice(0, 6)}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="total"
-                    label={({ item, percent }) => `${item.length > 10 ? item.substring(0, 10) + '...' : item} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {voteCounts.slice(0, 6).map((entry, index) => (
-                      <Cell key={entry.item} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value, name, props) => [value, props.payload.item]} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[300px] text-gray-500">
-                No vote data available for the selected filters
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Daily Trends */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Daily Vote Trends</h3>
-          {dailyTrends.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={dailyTrends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                />
-                <YAxis />
-                <Tooltip 
-                  labelFormatter={(date) => new Date(date).toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                />
-                <Line type="monotone" dataKey="likes" stroke="#22c55e" strokeWidth={2} name="Likes" />
-                <Line type="monotone" dataKey="dislikes" stroke="#ef4444" strokeWidth={2} name="Dislikes" />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[300px] text-gray-500">
-              No trend data available for the selected filters
             </div>
           )}
-        </div>
 
-        {/* Menu Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">
-            Menu for {selectedDay || 'No day selected'}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {selectedDay && menuItems.length > 0 ? (
-              menuItems
-                .filter(item => item && item.trim() !== '')
-                .map((item, index) => {
-                  const itemVotes = voteCounts.find(v => v.item.toLowerCase() === item.toLowerCase());
-                  return (
-                    <div
-                      key={`${selectedDay}-${item}-${index}`}
-                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                    >
-                      <h4 className="font-semibold text-gray-800 mb-2">{item}</h4>
-                      {itemVotes ? (
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-green-600">👍 {itemVotes.likes}</span>
-                          <span className="text-red-600">👎 {itemVotes.dislikes}</span>
-                          <span className="text-gray-500">
-                            {itemVotes.ratio.toFixed(1)}% positive
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-400">No votes yet</div>
-                      )}
-                    </div>
-                  );
-                })
+          {/* Charts */}
+          <div className="charts-grid">
+            <div className="chart-card">
+              <h3 className="chart-title">Vote Counts by Item</h3>
+              {voteCounts.length > 0 ? (
+                <div className="chart-container">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={voteCounts.slice(0, 10)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis 
+                        dataKey="item" 
+                        angle={-45}
+                        textAnchor="end"
+                        height={100}
+                        fontSize={12}
+                        fill="#1a4d1a"
+                      />
+                      <YAxis fill="#555" />
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '2px solid #228b22',
+                          borderRadius: '12px',
+                          boxShadow: '0 8px 25px rgba(34, 139, 34, 0.15)'
+                        }}
+                      />
+                      <Bar dataKey="likes" fill="#228B22" name="Likes" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="dislikes" fill="#ef4444" name="Dislikes" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="no-data">
+                  <p>No vote data available for the selected filters</p>
+                </div>
+              )}
+            </div>
+
+            <div className="chart-card">
+              <h3 className="chart-title">Most Popular Items</h3>
+              {voteCounts.length > 0 ? (
+                <div className="chart-container">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={voteCounts.slice(0, 6)}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="total"
+                        label={({ item, percent }) => `${item.length > 10 ? item.substring(0, 10) + '...' : item} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {voteCounts.slice(0, 6).map((entry, index) => (
+                          <Cell key={entry.item} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value, name, props) => [value, props.payload.item]}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '2px solid #228b22',
+                          borderRadius: '12px',
+                          boxShadow: '0 8px 25px rgba(34, 139, 34, 0.15)'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="no-data">
+                  <p>No vote data available for the selected filters</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Daily Trends */}
+          <div className="chart-card trends-card">
+            <h3 className="chart-title">📈 Daily Vote Trends</h3>
+            {dailyTrends.length > 0 ? (
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={dailyTrends}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      fill="#1a4d1a"
+                    />
+                    <YAxis fill="#555" />
+                    <Tooltip 
+                      labelFormatter={(date) => new Date(date).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        border: '2px solid #228b22',
+                        borderRadius: '12px',
+                        boxShadow: '0 8px 25px rgba(34, 139, 34, 0.15)'
+                      }}
+                    />
+                    <Line type="monotone" dataKey="likes" stroke="#22c55e" strokeWidth={3} name="Likes" dot={{ fill: '#22c55e', strokeWidth: 2, r: 6 }} />
+                    <Line type="monotone" dataKey="dislikes" stroke="#ef4444" strokeWidth={3} name="Dislikes" dot={{ fill: '#ef4444', strokeWidth: 2, r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                {!selectedDay 
-                  ? "Please select a day to view the menu" 
-                  : menuData.length === 0 
-                    ? "Loading menu data..." 
-                    : "No menu items available for this day"
-                }
+              <div className="no-data">
+                <p>No trend data available for the selected filters</p>
               </div>
             )}
+          </div>
+
+          {/* Menu Section */}
+          <div className="menu-section">
+            <h3 className="menu-title">
+              🍽️ Menu for {selectedDay || 'No day selected'}
+            </h3>
+            <div className="menu-grid ">
+              {selectedDay && menuItems.length > 0 ? (
+                menuItems
+                  .filter(item => item && item.trim() !== '')
+                  .map((item, index) => {
+                    const itemVotes = voteCounts.find(v => v.item.toLowerCase() === item.toLowerCase());
+                    return (
+                      <div
+                        key={`${selectedDay}-${item}-${index}`}
+                        className="menu-item-card"
+                      >
+                        <h4 className="menu-item-name">{item}</h4>
+                        {itemVotes ? (
+                          <div className="menu-item-votes">
+                            <span className="vote-like">👍 {itemVotes.likes}</span>
+                            <span className="vote-dislike">👎 {itemVotes.dislikes}</span>
+                            <span className="vote-percentage">
+                              {itemVotes.ratio.toFixed(1)}% positive
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="no-votes">No votes yet</div>
+                        )}
+                      </div>
+                    );
+                  })
+              ) : (
+                <div className="no-menu-data">
+                  {!selectedDay 
+                    ? "Please select a day to view the menu" 
+                    : menuData.length === 0 
+                      ? "Loading menu data..." 
+                      : "No menu items available for this day"
+                  }
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
