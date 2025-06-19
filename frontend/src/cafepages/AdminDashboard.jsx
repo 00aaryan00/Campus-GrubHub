@@ -2,25 +2,42 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { NotificationManager } from "../utils/notifications";
+import { useMenuNotifications } from "../hooks/useRealtimeNotifications";
+import { v4 as uuidv4 } from "uuid";
 
 export default function AdminDashboard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [previousItems, setPreviousItems] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showDeletePopup, setShowDeletePopup] = useState(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const { notifyNewDish, notifyMenuUpdate } = useMenuNotifications();
 
-  // REMOVED: Manual notification permission request - handled by AppWrapper
-  // REMOVED: useMenuNotifications hook - global system handles all notifications
-
-  // Load existing menu on mount
   useEffect(() => {
-    fetchMenu();
+    const initializeComponent = async () => {
+      try {
+        const permissionGranted = await NotificationManager.requestPermission();
+        if (permissionGranted) {
+          console.log("Notification permissions granted");
+          NotificationManager.showToast("Notifications enabled for menu updates", "success");
+        } else {
+          console.log("Notification permissions denied");
+          NotificationManager.showToast("Enable notifications for better experience", "warning");
+        }
+      } catch (error) {
+        console.error("Error requesting notification permission:", error);
+      }
+      await fetchMenu();
+    };
+
+    initializeComponent();
   }, []);
 
   const fetchMenu = useCallback(async () => {
     try {
       setLoading(true);
       const res = await axios.get("http://localhost:5000/auntys-cafe/admin-dashboard");
-      console.log("Fetched menu items:", res.data.items);
       const fetchedItems = res.data.items || [];
       setItems(fetchedItems);
       setPreviousItems(fetchedItems);
@@ -33,161 +50,132 @@ export default function AdminDashboard() {
   }, []);
 
   const handleAddItem = () => {
-    const newItem = { name: "", price: "", veg: true, available: true, isNew: true };
+    const newItem = {
+      name: "",
+      price: "",
+      veg: true,
+      available: true,
+      isNew: true,
+      dishId: uuidv4(),
+    };
     setItems([...items, newItem]);
     NotificationManager.showToast("New item slot added. Fill details and submit to save.", "info");
   };
 
-  const handleDeleteItem = async (name) => {
-    if (!name || name.trim() === "") {
-      NotificationManager.showToast("Cannot delete item without a name", "warning");
-      return;
-    }
-
-    if (!window.confirm(`Delete "${name}" from menu?`)) return;
-
-    try {
-      console.log("Attempting to delete:", name);
-
-      const deleteUrl = `http://localhost:5000/auntys-cafe/admin-dashboard/${encodeURIComponent(name)}`;
-      console.log("Delete URL:", deleteUrl);
-
-      const response = await axios.delete(deleteUrl);
-      console.log("Delete response:", response.data);
-
-      // Update the UI immediately
-      setItems(prevItems => prevItems.filter(item => item.name !== name));
-      
-      // Show success feedback (global system will handle notifications to users)
-      NotificationManager.showToast(`Successfully deleted "${name}"`, "success");
-
-      // REMOVED: Manual browser notifications - global system handles these
-      
-    } catch (err) {
-      console.error("Delete error:", err);
-
-      let errorMessage = "Unknown error occurred";
-      if (err.response) {
-        console.error("Error response:", err.response.data);
-        errorMessage = err.response.data.error || err.response.data.details || 'Server error';
-      } else if (err.request) {
-        console.error("No response received:", err.request);
-        errorMessage = "No response from server. Check if the server is running.";
-      } else {
-        console.error("Request error:", err.message);
-        errorMessage = err.message;
-      }
-
-      NotificationManager.showToast(`Error deleting item: ${errorMessage}`, "error");
-    }
-  };
-
   const handleUpdateItem = (index, field, value) => {
     const newItems = [...items];
-    if (field === 'price') {
+    if (field === "price") {
       newItems[index][field] = Number(value);
-    } else if (field === 'veg') {
+    } else if (field === "veg") {
       newItems[index][field] = value === "veg";
+    } else if (field === "available") {
+      newItems[index][field] = value;
     } else {
       newItems[index][field] = value;
     }
     setItems(newItems);
   };
 
-  const detectNewItems = (currentItems, previousItems) => {
-    const previousItemNames = new Set(previousItems.map(item => item.name?.trim().toLowerCase()));
-    return currentItems.filter(item => 
-      item.name && 
-      item.name.trim() !== "" && 
-      item.price > 0 && 
-      !previousItemNames.has(item.name.trim().toLowerCase())
-    );
-  };
-
-  // In AdminDashboard.js - Fixed handleSubmit function
-const handleSubmit = async () => {
-  try {
-    setLoading(true);
-
-    // Validate items before submitting
-    const validItems = items.filter(item =>
-      item.name && item.name.trim() !== "" && item.price > 0
-    );
-
-    if (validItems.length === 0) {
-      NotificationManager.showToast("Please add at least one valid item with name and price.", "warning");
+  const handleDeleteItem = async (item) => {
+    if (!item.name || item.name.trim() === "") {
+      NotificationManager.showToast("Cannot delete item without a name", "warning");
       return;
     }
 
-    // Detect new items for notifications
-    const newItems = detectNewItems(validItems, previousItems);
+    try {
+      setLoading(true);
+      console.log("Attempting to delete:", item.name);
+      const response = await axios.delete("http://localhost:5000/auntys-cafe/admin-dashboard", {
+        data: { dishName: item.name, dishId: item.dishId },
+      });
+      console.log("Delete response:", response.data);
 
-    console.log("Submitting items:", validItems);
-    console.log("New items detected:", newItems);
+      // Update UI immediately
+      setItems(items.filter((i) => i.dishId !== item.dishId));
+      setPreviousItems(previousItems.filter((i) => i.dishId !== item.dishId));
+      NotificationManager.showToast(`Dish "${item.name}" deleted permanently`, "success");
+    } catch (err) {
+      console.error("Delete error:", err);
+      let errorMessage = err.response?.data?.error || err.message || "Unknown error occurred";
+      NotificationManager.showToast(`Error deleting dish: ${errorMessage}`, "error");
+    } finally {
+      setLoading(false);
+      setShowDeletePopup(null);
+    }
+  };
 
-    const response = await axios.post("http://localhost:5000/auntys-cafe/admin-dashboard", {
-      items: validItems
-    });
+  const detectNewItems = (currentItems, previousItems) => {
+    const previousItemNames = new Set(previousItems.map((item) => item.name?.trim().toLowerCase()));
+    return currentItems.filter(
+      (item) =>
+        item.name &&
+        item.name.trim() !== "" &&
+        item.price > 0 &&
+        !previousItemNames.has(item.name.trim().toLowerCase())
+    );
+  };
 
-    console.log("Submit response:", response.data);
-
-    // Show admin feedback
-    if (newItems.length > 0) {
-      if (newItems.length === 1) {
-        NotificationManager.showToast(
-          `New dish "${newItems[0].name}" added to today's menu!`,
-          'success'
-        );
-      } else {
-        NotificationManager.showToast(
-          `${newItems.length} new dishes added to today's menu!`,
-          'success'
-        );
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
+      const validItems = items.filter((item) => item.name && item.name.trim() !== "" && item.price > 0);
+      if (validItems.length === 0) {
+        NotificationManager.showToast("Please add at least one valid item with name and price.", "warning");
+        return;
       }
 
-      // FIX: Actually notify users about new dishes
-      newItems.forEach(dish => {
-        NotificationManager.showNewDishNotification(dish, false); // false = not admin
+      const newItems = detectNewItems(validItems, previousItems);
+      const itemsWithAvailability = validItems.map((item) => ({
+        ...item,
+        availabilityHistory: item.isNew
+          ? [{ availableFrom: new Date().toISOString(), availableTo: item.available ? null : new Date().toISOString() }]
+          : item.availabilityHistory || [{ availableFrom: new Date().toISOString(), availableTo: item.available ? null : new Date().toISOString() }],
+      }));
+
+      const response = await axios.post("http://localhost:5000/auntys-cafe/admin-dashboard", {
+        items: itemsWithAvailability,
       });
+
+      console.log("Submit response:", response.data);
+
+      if (newItems.length > 0) {
+        newItems.forEach((item, index) => {
+          setTimeout(() => {
+            notifyNewDish(item.name, item.price, item.veg);
+          }, index * 1000);
+        });
+        NotificationManager.showToast(
+          newItems.length === 1
+            ? `New dish "${newItems[0].name}" added to today's menu!`
+            : `${newItems.length} new dishes added to today's menu!`,
+          "success"
+        );
+        newItems.forEach((dish) => {
+          NotificationManager.showNewDishNotification(dish, false);
+        });
+      }
+
+      notifyMenuUpdate(validItems.length);
+      NotificationManager.showToast(`Menu updated successfully with ${validItems.length} items`, "success");
+      setPreviousItems(validItems);
+      setItems(validItems.map((item) => ({ ...item, isNew: false })));
+    } catch (err) {
+      console.error("Submit error:", err);
+      let errorMessage = err.response?.data?.error || err.message || "Unknown error occurred";
+      NotificationManager.showToast(`Error updating menu: ${errorMessage}`, "error");
+    } finally {
+      setLoading(false);
     }
-
-    // General success feedback
-    NotificationManager.showToast(
-      `Menu updated successfully with ${validItems.length} items`,
-      'success'
-    );
-
-    // Update previous items for next comparison
-    setPreviousItems(validItems);
-
-    // Remove the isNew flag from items
-    setItems(validItems.map(item => ({ ...item, isNew: false })));
-
-  } catch (err) {
-    console.error("Submit error:", err);
-    
-    let errorMessage = "Unknown error occurred";
-    if (err.response) {
-      errorMessage = err.response.data.error || 'Server error';
-    } else if (err.request) {
-      errorMessage = "No response from server";
-    } else {
-      errorMessage = err.message;
-    }
-
-    NotificationManager.showToast(`Error updating menu: ${errorMessage}`, "error");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleAccessPreOrder = () => {
-    // Navigate to the pre-order page
     window.open("http://localhost:5173/admin/orders", "_blank");
     NotificationManager.showToast("Opening pre-orders management", "info");
   };
 
-  // REMOVED: Test notification function - not needed in production
+  const filteredItems = items.filter((item) =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -210,9 +198,9 @@ const handleSubmit = async () => {
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button 
+          <button
             onClick={handleAccessPreOrder}
-            style={{ 
+            style={{
               padding: "10px 20px",
               backgroundColor: "#ff6b35",
               color: "white",
@@ -220,25 +208,43 @@ const handleSubmit = async () => {
               borderRadius: "5px",
               cursor: "pointer",
               fontSize: "14px",
-              fontWeight: "bold"
+              fontWeight: "bold",
             }}
           >
             Manage Cafe Pre-Orders
           </button>
         </div>
       </div>
-      
-      {items.length === 0 && (
-        <div style={{ 
-          padding: "20px", 
-          border: "2px dashed #ccc", 
-          borderRadius: "8px", 
-          textAlign: "center",
-          backgroundColor: "#f9f9f9",
-          marginBottom: "20px"
-        }}>
+
+      <div style={{ marginBottom: "20px" }}>
+        <input
+          type="text"
+          placeholder="Search dishes..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "10px",
+            border: "1px solid #ccc",
+            borderRadius: "4px",
+            fontSize: "16px",
+          }}
+        />
+      </div>
+
+      {filteredItems.length === 0 && (
+        <div
+          style={{
+            padding: "20px",
+            border: "2px dashed #ccc",
+            borderRadius: "8px",
+            textAlign: "center",
+            backgroundColor: "#f9f9f9",
+            marginBottom: "20px",
+          }}
+        >
           <p style={{ color: "#666", fontStyle: "italic", margin: "0 0 10px 0" }}>
-            No menu items found. Click "Add Another Item" to start adding items.
+            {searchQuery ? "No dishes match your search." : "No menu items found. Click 'Add Another Item' to start adding items."}
           </p>
           <p style={{ color: "#888", fontSize: "14px", margin: "0" }}>
             💡 Tip: Users will receive notifications when new dishes are added!
@@ -252,94 +258,155 @@ const handleSubmit = async () => {
         </button>
       </Link>
 
-      {items.map((item, index) => (
-        <div key={index} style={{
-          border: item.isNew ? "2px solid #10b981" : "1px solid #ccc",
-          padding: "15px",
-          marginBottom: "10px",
-          borderRadius: "5px",
-          backgroundColor: item.isNew ? "#f0fdf4" : "#f9f9f9",
-          position: "relative"
-        }}>
+      {filteredItems.map((item, index) => (
+        <div
+          key={item.dishId}
+          style={{
+            border: item.isNew ? "2px solid #10b981" : "1px solid #ccc",
+            padding: "15px",
+            marginBottom: "10px",
+            borderRadius: "5px",
+            backgroundColor: item.isNew ? "#f0fdf4" : "#f9f9f9",
+            position: "relative",
+          }}
+        >
           {item.isNew && (
-            <div style={{
-              position: "absolute",
-              top: "-8px",
-              right: "10px",
-              backgroundColor: "#10b981",
-              color: "white",
-              padding: "2px 8px",
-              borderRadius: "12px",
-              fontSize: "12px",
-              fontWeight: "bold"
-            }}>
+            <div
+              style={{
+                position: "absolute",
+                top: "-8px",
+                right: "10px",
+                backgroundColor: "#10b981",
+                color: "white",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            >
               NEW
             </div>
           )}
-          
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <input
               placeholder="Item name"
               value={item.name || ""}
-              onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
-              style={{ 
+              onChange={(e) => handleUpdateItem(index, "name", e.target.value)}
+              style={{
                 minWidth: "150px",
                 border: item.isNew ? "2px solid #10b981" : "1px solid #ccc",
                 borderRadius: "4px",
-                padding: "8px"
+                padding: "8px",
               }}
             />
             <input
               type="number"
               placeholder="Price"
               value={item.price || ""}
-              onChange={(e) => handleUpdateItem(index, 'price', e.target.value)}
-              style={{ 
+              onChange={(e) => handleUpdateItem(index, "price", e.target.value)}
+              style={{
                 width: "80px",
                 border: item.isNew ? "2px solid #10b981" : "1px solid #ccc",
                 borderRadius: "4px",
-                padding: "8px"
+                padding: "8px",
               }}
             />
             <select
               value={item.veg ? "veg" : "nonveg"}
-              onChange={(e) => handleUpdateItem(index, 'veg', e.target.value)}
-              style={{ 
+              onChange={(e) => handleUpdateItem(index, "veg", e.target.value)}
+              style={{
                 border: item.isNew ? "2px solid #10b981" : "1px solid #ccc",
                 borderRadius: "4px",
-                padding: "8px"
+                padding: "8px",
               }}
             >
               <option value="veg">Veg</option>
               <option value="nonveg">Non-Veg</option>
             </select>
-
             <label style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               <input
                 type="checkbox"
                 checked={item.available || false}
-                onChange={(e) => handleUpdateItem(index, 'available', e.target.checked)}
+                onChange={(e) => handleUpdateItem(index, "available", e.target.checked)}
               />
               Available
             </label>
-
             <button
+              onClick={() => setShowDeletePopup(item)}
               style={{
-                background: "red",
+                padding: "8px 12px",
+                backgroundColor: "#dc3545",
                 color: "white",
                 border: "none",
-                padding: "5px 10px",
-                borderRadius: "3px",
-                cursor: "pointer"
+                borderRadius: "4px",
+                cursor: "pointer",
               }}
-              onClick={() => handleDeleteItem(item.name)}
-              disabled={!item.name || item.name.trim() === ""}
             >
               Delete
             </button>
           </div>
         </div>
       ))}
+
+      {showDeletePopup && (
+        <div
+          style={{
+            position: "fixed",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              maxWidth: "400px",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginBottom: "15px" }}>Confirm Deletion</h3>
+            <p style={{ marginBottom: "20px" }}>
+              Are you sure you want to permanently delete "{showDeletePopup.name}"? This will remove all associated votes and feedback.
+            </p>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+              <button
+                onClick={() => handleDeleteItem(showDeletePopup)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setShowDeletePopup(null)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#6c757d",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: "20px" }}>
         <button
@@ -351,7 +418,7 @@ const handleSubmit = async () => {
             color: "white",
             border: "none",
             borderRadius: "3px",
-            cursor: "pointer"
+            cursor: "pointer",
           }}
           disabled={loading}
         >
@@ -365,7 +432,7 @@ const handleSubmit = async () => {
             color: "white",
             border: "none",
             borderRadius: "3px",
-            cursor: "pointer"
+            cursor: "pointer",
           }}
           disabled={loading}
         >
@@ -373,7 +440,6 @@ const handleSubmit = async () => {
         </button>
       </div>
 
-      {/* Status indicators */}
       <div style={{ 
         marginTop: "20px", 
         padding: "15px", 

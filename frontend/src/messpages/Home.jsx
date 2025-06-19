@@ -270,9 +270,9 @@ const Home = () => {
         </div>
         {/* Floating Icons */}
         {floatingIcons.map(icon => (
-          <span
+          <span 
             key={icon.id}
-            className="floating-icon"
+            className=" floating-icon"
             style={{
               left: icon.left,
               bottom: '10px',

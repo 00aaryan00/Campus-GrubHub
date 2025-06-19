@@ -45,12 +45,13 @@ body {
 }
 
 /* Floating Icons */
-.floating-icon {
+ .floating-icon {
   position: absolute;
-  font-size: 0.8rem;
+  font-size:small;
   pointer-events: none;
   animation: floatUpAndFade 2s ease-out forwards;
-  z-index: 99;
+  z-index: 90;
+  /* size: 5px; */
 }
 
 /* Loading Screen */

@@ -23,7 +23,6 @@ export default function AuntysCafe() {
         navigate("/login");
       }
     });
-
     return () => unsubscribe();
   }, [navigate]);
 
@@ -36,7 +35,7 @@ export default function AuntysCafe() {
         const [menuRes, votesRes, userVoteRes] = await Promise.all([
           axios.get("http://localhost:5000/auntys-cafe/menu"),
           axios.get("http://localhost:5000/auntys-cafe/dish-votes"),
-          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`)
+          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`),
         ]);
 
         setMenu(menuRes.data.items || []);
@@ -53,7 +52,7 @@ export default function AuntysCafe() {
     fetchData();
   }, [userId]);
 
-  const handleVote = async (itemName, voteType) => {
+  const handleVote = async (itemName, dishId, voteType) => {
     if (!userId) {
       alert("Please log in to vote");
       return;
@@ -64,14 +63,14 @@ export default function AuntysCafe() {
       const response = await axios.post("http://localhost:5000/auntys-cafe/vote", {
         userId,
         dishName: itemName,
+        dishId: dishId || null, // Fallback to null if dishId is missing
         vote: voteType,
       });
 
       if (response.data.success) {
-        // Refresh data after successful vote
         const [votesRes, userVoteRes] = await Promise.all([
           axios.get("http://localhost:5000/auntys-cafe/dish-votes"),
-          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`)
+          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`),
         ]);
 
         setVotes(votesRes.data.votes || {});
@@ -88,7 +87,7 @@ export default function AuntysCafe() {
     }
   };
 
-  const handleFeedback = async (itemName) => {
+  const handleFeedback = async (itemName, dishId) => {
     if (!userId) {
       alert("Please log in to submit feedback");
       return;
@@ -96,7 +95,6 @@ export default function AuntysCafe() {
 
     try {
       const comment = feedbacks[itemName];
-
       if (!comment || comment.trim() === "") {
         alert("Please enter a valid comment.");
         return;
@@ -106,14 +104,13 @@ export default function AuntysCafe() {
       const response = await axios.post("http://localhost:5000/auntys-cafe/feedback", {
         userId,
         dishName: itemName,
-        comment: comment.trim()
+        dishId: dishId || null, // Fallback to null if dishId is missing
+        comment: comment.trim(),
       });
 
       if (response.data.success) {
         alert("Feedback submitted successfully!");
         setFeedbacks({ ...feedbacks, [itemName]: "" });
-
-        // Refresh feedback data
         const voteRes = await axios.get("http://localhost:5000/auntys-cafe/dish-votes");
         setVotes(voteRes.data.votes || {});
       } else {
@@ -133,19 +130,13 @@ export default function AuntysCafe() {
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return "Just now";
-    
-    // Handle Firebase Timestamp objects
     if (timestamp.toDate) {
       return timestamp.toDate().toLocaleString();
     }
-    
-    // Handle ISO string timestamps
-    if (typeof timestamp === 'string') {
+    if (typeof timestamp === "string") {
       const date = new Date(timestamp);
       return isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
     }
-    
-    // Handle regular date objects
     const date = new Date(timestamp);
     return isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
   };
@@ -163,7 +154,6 @@ export default function AuntysCafe() {
 
   return (
     <div className="cafe-container">
-      {/* Loading Overlay - Fixed z-index and visibility */}
       {loading && (
         <div className="loading-overlay">
           <div className="loading-card">
@@ -173,7 +163,6 @@ export default function AuntysCafe() {
         </div>
       )}
 
-      {/* Floating Action Buttons */}
       <div className="floating-buttons">
         <Link to="/auntys-cafe/preorder">
           <button className="order-button">
@@ -189,52 +178,42 @@ export default function AuntysCafe() {
         </Link>
       </div>
 
-      {/* Header with Cafe Branding */}
       <div className="cafe-header">
         <div className="container mx-auto px-4">
           <div className="text-center mb-6">
             <h1 className="cafe-title">☕ Aunty's Cafe</h1>
             <p className="cafe-subtitle">Today's Special Menu - Homemade goodness, served with love</p>
           </div>
-          
           <div className="header-buttons">
-            <button
-              onClick={() => navigate("/analytics")}
-              className="header-button"
-            >
+            <button onClick={() => navigate("/analytics")} className="header-button">
               📊 View Stats
             </button>
-            <button
-              onClick={() => navigate("/admin-login")}
-              className="header-button"
-            >
+            <button onClick={() => navigate("/admin-login")} className="header-button">
               👤 Admin Login
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
-        {/* Navigation Tabs */}
         <div className="tab-container">
           <div className="tab-wrapper">
             <button
-              className={`tab-button ${activeTab === 'menu' ? 'tab-active' : 'tab-inactive'}`}
-              onClick={() => setActiveTab('menu')}
+              className={`tab-button ${activeTab === "menu" ? "tab-active" : "tab-inactive"}`}
+              onClick={() => setActiveTab("menu")}
             >
               🍽️ Menu Items
             </button>
             <button
-              className={`tab-button ${activeTab === 'feedback' ? 'tab-active' : 'tab-inactive'}`}
-              onClick={() => setActiveTab('feedback')}
+              className={`tab-button ${activeTab === "feedback" ? "tab-active" : "tab-inactive"}`}
+              onClick={() => setActiveTab("feedback")}
             >
               💬 All Feedback
             </button>
           </div>
         </div>
 
-        {activeTab === 'menu' ? (
+        {activeTab === "menu" ? (
           <div className="menu-grid">
             {menu.length === 0 && (
               <div className="empty-state">
@@ -247,23 +226,19 @@ export default function AuntysCafe() {
             {menu.map((item, index) => {
               const dishId = normalizeDocId(item.name);
               const userHasVoted = !!userVotes[dishId];
-              const dishVotes = votes[dishId] || { likes: 0, dislikes: 0, comments: [] };
+              const dishVotes = votes[dishId] || { likes: 0, dislikes: 0, currentComments: [], pastComments: [] };
 
               return (
                 <div key={index} className="menu-item-card">
                   <div className="menu-item-header">
                     <div>
-                      <h3 className="item-name">
-                        {item.name}
-                      </h3>
-                      <div className="item-price">
-                        ₹{item.price}
-                      </div>
+                      <h3 className="item-name">{item.name}</h3>
+                      <div className="item-price">₹{item.price}</div>
                       <div className="item-tags">
-                        <span className={`tag ${item.veg ? 'tag-veg' : 'tag-non-veg'}`}>
+                        <span className={`tag ${item.veg ? "tag-veg" : "tag-non-veg"}`}>
                           {item.veg ? "🥬 Veg" : "🍖 Non-Veg"}
                         </span>
-                        <span className={`tag ${item.available ? 'tag-available' : 'tag-unavailable'}`}>
+                        <span className={`tag ${item.available ? "tag-available" : "tag-unavailable"}`}>
                           {item.available ? "✅ Available" : "❌ Sold Out"}
                         </span>
                       </div>
@@ -280,25 +255,23 @@ export default function AuntysCafe() {
                     </div>
                   </div>
 
-                  {/* Voting Buttons */}
                   <div className="voting-buttons">
                     <button
-                      onClick={() => handleVote(item.name, "like")}
+                      onClick={() => handleVote(item.name, item.dishId, "like")}
                       disabled={userHasVoted || loading}
-                      className={`vote-button ${userHasVoted || loading ? 'vote-disabled' : 'vote-like'}`}
+                      className={`vote-button ${userHasVoted || loading ? "vote-disabled" : "vote-like"}`}
                     >
-                      👍 {userHasVoted && userVotes[dishId]?.type === 'like' ? 'Liked' : 'Like'}
+                      👍 {userHasVoted && userVotes[dishId]?.type === "like" ? "Liked" : "Like"}
                     </button>
                     <button
-                      onClick={() => handleVote(item.name, "dislike")}
+                      onClick={() => handleVote(item.name, item.dishId, "dislike")}
                       disabled={userHasVoted || loading}
-                      className={`vote-button ${userHasVoted || loading ? 'vote-disabled' : 'vote-dislike'}`}
+                      className={`vote-button ${userHasVoted || loading ? "vote-disabled" : "vote-dislike"}`}
                     >
-                      👎 {userHasVoted && userVotes[dishId]?.type === 'dislike' ? 'Disliked' : 'Dislike'}
+                      👎 {userHasVoted && userVotes[dishId]?.type === "dislike" ? "Disliked" : "Dislike"}
                     </button>
                   </div>
 
-                  {/* Feedback Input */}
                   <div className="feedback-input-container">
                     <div className="feedback-input-wrapper">
                       <input
@@ -310,7 +283,7 @@ export default function AuntysCafe() {
                         className="feedback-input"
                       />
                       <button
-                        onClick={() => handleFeedback(item.name)}
+                        onClick={() => handleFeedback(item.name, item.dishId)}
                         disabled={loading || !feedbacks[item.name]?.trim()}
                         className="feedback-submit"
                       >
@@ -319,36 +292,55 @@ export default function AuntysCafe() {
                     </div>
                   </div>
 
-                  {/* Recent Comments */}
-                  {dishVotes.comments?.length > 0 && (
+                  {(dishVotes.currentComments?.length > 0 || dishVotes.pastComments?.length > 0) && (
                     <div>
                       <h4 className="comments-title">
                         <span className="mr-2">💭</span>
                         Recent Feedback:
                       </h4>
                       <div className="comments-container">
-                        {dishVotes.comments
+                        {dishVotes.currentComments
                           .sort((a, b) => {
-                            const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
-                            const bTime = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+                            const aTime = new Date(a.timestamp || 0);
+                            const bTime = new Date(b.timestamp || 0);
                             return bTime - aTime;
                           })
                           .slice(0, 3)
                           .map((commentObj, idx) => (
-                            <div key={`${commentObj.userId}-${idx}`} className="comment-card">
+                            <div key={`current-${commentObj.userId}-${idx}`} className="comment-card">
                               <p className="comment-text">"{commentObj.comment}"</p>
                               <p className="comment-meta">
-                                — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} • {formatTimestamp(commentObj.timestamp)}
+                                — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} •{" "}
+                                {formatTimestamp(commentObj.timestamp)}
                               </p>
                             </div>
                           ))}
+                        {dishVotes.pastComments?.length > 0 && (
+                          <>
+                            <hr className="border-t-2 border-gray-400 my-2" />
+                            <h5 className="text-sm font-bold mb-2">Previous Reviews:</h5>
+                            {dishVotes.pastComments
+                              .sort((a, b) => {
+                                const aTime = new Date(a.timestamp || 0);
+                                const bTime = new Date(b.timestamp || 0);
+                                return bTime - aTime;
+                              })
+                              .slice(0, 3)
+                              .map((commentObj, idx) => (
+                                <div key={`past-${commentObj.userId}-${idx}`} className="comment-card">
+                                  <p className="comment-text">"{commentObj.comment}"</p>
+                                  <p className="comment-meta">
+                                    — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} •{" "}
+                                    {formatTimestamp(commentObj.timestamp)}
+                                  </p>
+                                </div>
+                              ))}
+                          </>
+                        )}
                       </div>
-                      {dishVotes.comments.length > 3 && (
-                        <button
-                          onClick={() => setActiveTab('feedback')}
-                          className="view-all-button"
-                        >
-                          View all {dishVotes.comments.length} feedbacks →
+                      {(dishVotes.currentComments.length > 3 || dishVotes.pastComments.length > 3) && (
+                        <button onClick={() => setActiveTab("feedback")} className="view-all-button">
+                          View all {dishVotes.currentComments.length + dishVotes.pastComments.length} feedbacks →
                         </button>
                       )}
                     </div>
@@ -364,7 +356,7 @@ export default function AuntysCafe() {
                 <span className="mr-3">💬</span>
                 All Customer Feedback
               </h2>
-              
+
               {menu.length === 0 ? (
                 <div className="empty-feedback-state">
                   <div className="empty-icon">☕</div>
@@ -374,43 +366,72 @@ export default function AuntysCafe() {
               ) : (
                 <div className="feedback-items">
                   {menu
-                    .filter(item => {
-                      const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
-                      return dishVotes.comments?.length > 0;
+                    .filter((item) => {
+                      const dishVotes = votes[normalizeDocId(item.name)] || {
+                        currentComments: [],
+                        pastComments: [],
+                      };
+                      return dishVotes.currentComments?.length > 0 || dishVotes.pastComments?.length > 0;
                     })
                     .map((item) => {
-                      const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
+                      const dishVotes = votes[normalizeDocId(item.name)] || {
+                        currentComments: [],
+                        pastComments: [],
+                      };
+                      const allComments = [...dishVotes.currentComments, ...dishVotes.pastComments];
                       return (
                         <div key={item.name} className="feedback-item">
                           <h3 className="feedback-dish-name">
                             {item.name}
                             <span className="feedback-count">
-                              ({dishVotes.comments.length} feedback{dishVotes.comments.length !== 1 ? 's' : ''})
+                              ({allComments.length} feedback{allComments.length !== 1 ? "s" : ""})
                             </span>
                           </h3>
                           <div className="feedback-comments">
-                            {dishVotes.comments
+                            {dishVotes.currentComments
                               .sort((a, b) => {
-                                const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
-                                const bTime = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+                                const aTime = new Date(a.timestamp || 0);
+                                const bTime = new Date(b.timestamp || 0);
                                 return bTime - aTime;
                               })
                               .map((commentObj, idx) => (
-                                <div key={`${commentObj.userId}-${idx}`} className="feedback-comment-card">
+                                <div key={`current-${commentObj.userId}-${idx}`} className="feedback-comment-card">
                                   <p className="feedback-comment-text">"{commentObj.comment}"</p>
                                   <p className="feedback-comment-meta">
-                                    — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} • {formatTimestamp(commentObj.timestamp)}
+                                    — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} •{" "}
+                                    {formatTimestamp(commentObj.timestamp)}
                                   </p>
                                 </div>
                               ))}
+                            {dishVotes.pastComments?.length > 0 && (
+                              <>
+                                <hr className="border-t-2 border-gray-400 my-2" />
+                                <h5 className="text-sm font-bold mb-2">Previous Reviews:</h5>
+                                {dishVotes.pastComments
+                                  .sort((a, b) => {
+                                    const aTime = new Date(a.timestamp || 0);
+                                    const bTime = new Date(b.timestamp || 0);
+                                    return bTime - aTime;
+                                  })
+                                  .map((commentObj, idx) => (
+                                    <div key={`past-${commentObj.userId}-${idx}`} className="feedback-comment-card">
+                                      <p className="feedback-comment-text">"{commentObj.comment}"</p>
+                                      <p className="feedback-comment-meta">
+                                        — {commentObj.userName || `User ${commentObj.userId.substring(0, 8)}...`} •{" "}
+                                        {formatTimestamp(commentObj.timestamp)}
+                                      </p>
+                                    </div>
+                                  ))}
+                              </>
+                            )}
                           </div>
                         </div>
                       );
                     })}
-                  
-                  {menu.filter(item => {
-                    const dishVotes = votes[normalizeDocId(item.name)] || { comments: [] };
-                    return dishVotes.comments?.length > 0;
+
+                  {menu.filter((item) => {
+                    const dishVotes = votes[normalizeDocId(item.name)] || { currentComments: [], pastComments: [] };
+                    return dishVotes.currentComments?.length > 0 || dishVotes.pastComments?.length > 0;
                   }).length === 0 && (
                     <div className="no-feedback-state">
                       <div className="empty-icon">☕</div>
