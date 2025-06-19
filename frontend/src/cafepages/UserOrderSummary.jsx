@@ -3,6 +3,7 @@ import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../firebase';
 import { NotificationManager } from '../utils/notifications';
+import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
 import './UserOrderSummary.css';
 
 const UserOrderSummary = () => {
@@ -10,6 +11,23 @@ const UserOrderSummary = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState('default');
+
+  // Initialize global notifications for this user
+  const { showNotification, showToast } = useGlobalNotifications(user?.email, false);
+
+  // Check notification permission status
+  useEffect(() => {
+    const checkPermission = () => {
+      const permission = NotificationManager.getNotificationPermission();
+      setNotificationPermission(permission);
+    };
+
+    checkPermission();
+    // Check permission changes
+    const interval = setInterval(checkPermission, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Memoized fetch function to prevent unnecessary re-renders
   const fetchUserOrders = useCallback(async (userEmail) => {
@@ -56,8 +74,12 @@ const UserOrderSummary = () => {
       setAuthLoading(false);
 
       if (currentUser) {
+        // Initialize user-specific notifications
+        NotificationManager.initializeUserNotifications(currentUser.email);
         fetchUserOrders(currentUser.email);
       } else {
+        // Clear notifications on logout
+        NotificationManager.clearUserNotifications();
         setLoading(false);
       }
     });
@@ -65,41 +87,17 @@ const UserOrderSummary = () => {
     return () => unsubscribe();
   }, [fetchUserOrders]);
 
-  // Listen for real-time updates from global notification system
-  useEffect(() => {
-    if (!user?.email) return;
-
-    const handleGlobalOrderUpdate = (e) => {
-      if (e.key === 'orderUpdate' && e.newValue) {
-        try {
-          const updateData = JSON.parse(e.newValue);
-          // Only refresh if this update is for the current user
-          if (updateData.userEmail === user.email) {
-            fetchUserOrders(user.email);
-          }
-        } catch (error) {
-          console.error('Error parsing order update:', error);
-        }
-      }
-    };
-
-    // Listen for updates from the global notification system
-    window.addEventListener('storage', handleGlobalOrderUpdate);
-    
-    // Also listen for custom events from the global system
-    const handleCustomOrderUpdate = (e) => {
-      if (e.detail?.userEmail === user.email) {
-        fetchUserOrders(user.email);
-      }
-    };
-    
-    window.addEventListener('orderStatusUpdate', handleCustomOrderUpdate);
-
-    return () => {
-      window.removeEventListener('storage', handleGlobalOrderUpdate);
-      window.removeEventListener('orderStatusUpdate', handleCustomOrderUpdate);
-    };
-  }, [user?.email, fetchUserOrders]);
+  // Request notification permission
+  const requestNotificationPermission = async () => {
+    const granted = await NotificationManager.requestPermission();
+    if (granted) {
+      setNotificationPermission('granted');
+      NotificationManager.showToast('✅ Notifications enabled! You\'ll receive updates about your orders.', 'success');
+    } else {
+      setNotificationPermission('denied');
+      NotificationManager.showToast('❌ Notifications disabled. You can enable them in browser settings.', 'warning');
+    }
+  };
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -148,6 +146,59 @@ const UserOrderSummary = () => {
     }
   };
 
+  // Render notification permission banner
+  const renderNotificationBanner = () => {
+    if (notificationPermission === 'granted') {
+      return (
+        <div className="notification-banner notification-enabled">
+          <div className="notification-banner-content">
+            <span className="notification-icon">🔔</span>
+            <div className="notification-text">
+              <strong>Notifications Enabled</strong>
+              <p>You'll receive real-time updates about your orders, even when this page is closed.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (notificationPermission === 'denied') {
+      return (
+        <div className="notification-banner notification-disabled">
+          <div className="notification-banner-content">
+            <span className="notification-icon">🔕</span>
+            <div className="notification-text">
+              <strong>Notifications Disabled</strong>
+              <p>Enable notifications in your browser settings to receive order updates.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (notificationPermission === 'default') {
+      return (
+        <div className="notification-banner notification-request">
+          <div className="notification-banner-content">
+            <span className="notification-icon">🔔</span>
+            <div className="notification-text">
+              <strong>Enable Notifications</strong>
+              <p>Get instant updates about your orders, even when this website is closed.</p>
+            </div>
+            <button 
+              onClick={requestNotificationPermission}
+              className="notification-enable-btn"
+            >
+              Enable Notifications
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   // Loading states
   if (authLoading) {
     return (
@@ -193,9 +244,6 @@ const UserOrderSummary = () => {
           <p className="orders-user-info">Welcome, {user.displayName || user.email}!</p>
           
           <div className="orders-header-actions">
-            <div className="orders-notifications-status">
-              🔔 <span>Real-time updates enabled</span>
-            </div>
             <button 
               onClick={handleRefresh}
               className="refresh-btn"
@@ -205,6 +253,9 @@ const UserOrderSummary = () => {
             </button>
           </div>
         </div>
+
+        {/* Notification Permission Banner */}
+        {renderNotificationBanner()}
 
         {orders.length === 0 ? (
           <div className="empty-orders-state">

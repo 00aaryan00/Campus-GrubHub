@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../api/axiosConfig";
 import { auth } from "../firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import "./Home.css";
@@ -19,7 +19,7 @@ const Home = () => {
   const [dataCache, setDataCache] = useState({
     lastUpdated: null,
     cacheDuration: 5 * 60 * 1000,
-    lastVoteDay: null
+    lastVoteDay: null,
   });
   const [error, setError] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -36,84 +36,89 @@ const Home = () => {
 
   // Function to add a new floating icon
   const addFloatingIcon = useCallback(() => {
-    const icons = ["👍", "👎","🧀","🥦","🥪","🍰","🍕","🍔"];
+    const icons = ["👍", "👎", "🧀", "🥦", "🥪", "🍰", "🍕", "🍔"];
     const newIcon = {
       id: Math.random().toString(36).substr(2, 9),
       icon: icons[Math.floor(Math.random() * icons.length)],
-      left: `${Math.random() * 90 + 5}%`, // Random position between 5% and 95%
-      rotation: `${Math.random() * 360}deg` // Random rotation
+      left: `${Math.random() * 90 + 5}%`,
+      rotation: `${Math.random() * 360}deg`,
     };
-    setFloatingIcons(prev => [...prev, newIcon]);
-    // Remove icon after animation duration (2s)
+    setFloatingIcons((prev) => [...prev, newIcon]);
     setTimeout(() => {
-      setFloatingIcons(prev => prev.filter(icon => icon.id !== newIcon.id));
+      setFloatingIcons((prev) => prev.filter((icon) => icon.id !== newIcon.id));
     }, 2000);
   }, []);
 
   // Set up interval to add floating icons
   useEffect(() => {
-    const interval = setInterval(addFloatingIcon, 1000); // Add new icon every 1 second
+    const interval = setInterval(addFloatingIcon, 1000);
     return () => clearInterval(interval);
   }, [addFloatingIcon]);
 
-  const loadInitialData = useCallback(async (forceRegular = false, forceRefresh = false) => {
-    try {
-      const now = Date.now();
-      const shouldUseCache = !forceRefresh && 
-                           dataCache.lastUpdated && 
-                           (now - dataCache.lastUpdated < dataCache.cacheDuration) &&
-                           dataCache.lastVoteDay === day;
-      
-      if (shouldUseCache && !forceRegular) return;
+  const loadInitialData = useCallback(
+    async (forceRegular = false, forceRefresh = false) => {
+      try {
+        const now = Date.now();
+        const shouldUseCache =
+          !forceRefresh &&
+          dataCache.lastUpdated &&
+          now - dataCache.lastUpdated < dataCache.cacheDuration &&
+          dataCache.lastVoteDay === day;
 
-      setLoading(true);
-      setError(null);
-      
-      const [menuResponse, quoteResponse, leaderboardResponse, userVotesResponse] = await Promise.all([
-        axios.get("http://localhost:5000/menu"),
-        axios.get("http://localhost:5000/daily-quote"),
-        axios.get("http://localhost:5000/leaderboard"),
-        authToken ? axios.get("http://localhost:5000/user-votes", {
-          headers: { Authorization: `Bearer ${authToken}` }
-        }) : Promise.resolve({ data: {} })
-      ]);
+        if (shouldUseCache && !forceRegular) return;
 
-      const menuData = menuResponse.data?.menu || {
-        breakfast: [],
-        lunch: [],
-        snacks: [],
-        dinner: []
-      };
-      const votesData = menuResponse.data?.votes || {};
-      const dayData = menuResponse.data?.day || "";
+        setLoading(true);
+        setError(null);
 
-      if (dataCache.lastVoteDay !== dayData) {
-        setUserVotes({});
+        const [menuResponse, quoteResponse, leaderboardResponse, userVotesResponse] = await Promise.all([
+          axiosInstance.get("/menu"),
+          axiosInstance.get("/daily-quote"),
+          axiosInstance.get("/leaderboard"),
+          authToken
+            ? axiosInstance.get("/user-votes", {
+                headers: { Authorization: `Bearer ${authToken}` },
+              })
+            : Promise.resolve({ data: {} }),
+        ]);
+
+        const menuData = menuResponse.data?.menu || {
+          breakfast: [],
+          lunch: [],
+          snacks: [],
+          dinner: [],
+        };
+        const votesData = menuResponse.data?.votes || {};
+        const dayData = menuResponse.data?.day || "";
+
+        if (dataCache.lastVoteDay !== dayData) {
+          setUserVotes({});
+        }
+
+        setMenu(menuData);
+        setVotes(votesData);
+        setDay(dayData);
+        setQuote(quoteResponse.data?.quote || "");
+        setLeaderboard(leaderboardResponse.data || []);
+        setDataCache((prev) => ({
+          ...prev,
+          lastUpdated: now,
+          lastVoteDay: dayData,
+        }));
+        if (userVotesResponse.data) {
+          setUserVotes(userVotesResponse.data);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+        setError(`Failed to load menu: ${error.message}`);
+      } finally {
+        setLoading(false);
+        setIsInitialLoad(false);
       }
+    },
+    [authToken, dataCache.lastVoteDay, day]
+  );
 
-      setMenu(menuData);
-      setVotes(votesData);
-      setDay(dayData);
-      setQuote(quoteResponse.data?.quote || "");
-      setLeaderboard(leaderboardResponse.data || []);
-      setDataCache(prev => ({ 
-        ...prev, 
-        lastUpdated: now,
-        lastVoteDay: dayData 
-      }));
-      if (userVotesResponse.data) {
-        setUserVotes(userVotesResponse.data);
-      }
-    } catch (error) {
-      console.error("Error loading data:", error);
-      setError(`Failed to load menu: ${error.message}`);
-    } finally {
-      setLoading(false);
-      setIsInitialLoad(false);
-    }
-  }, [authToken, dataCache.lastVoteDay]);
-
-  const debouncedLoadInitialData = useCallback(debounce(loadInitialData, 500), [loadInitialData]);
+  const debouncedLoadInitialData = useCallback(debounce(loadInitialData, 1000), [loadInitialData]);
 
   useEffect(() => {
     let isMounted = true;
@@ -131,11 +136,15 @@ const Home = () => {
         try {
           const token = await currentUser.getIdToken(true);
           setAuthToken(token);
-          
-          await axios.post("http://localhost:5000/save-user", {}, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
+
+          await axiosInstance.post(
+            "/save-user",
+            {},
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
           await loadInitialData(true);
         } catch (error) {
           console.error("Error setting up user:", error);
@@ -157,8 +166,8 @@ const Home = () => {
 
   const handleVoteClick = async (item, type, retryCount = 0) => {
     if (!user || !authToken || processingVotes[item]) return;
-    
-    setProcessingVotes(prev => ({ ...prev, [item]: true }));
+
+    setProcessingVotes((prev) => ({ ...prev, [item]: true }));
     setError(null);
 
     try {
@@ -167,31 +176,31 @@ const Home = () => {
       const newVotes = { ...previousVotes };
       const newUserVotes = { ...userVotes };
 
-      const newType = userVotes[item] === type ? 'neutral' : type;
+      const newType = userVotes[item] === type ? "neutral" : type;
 
       if (previousVote) {
         newVotes[previousVote] = Math.max(0, (newVotes[previousVote] || 0) - 1);
       }
-      if (newType !== 'neutral') {
+      if (newType !== "neutral") {
         newVotes[newType] = (newVotes[newType] || 0) + 1;
         newUserVotes[item] = newType;
       } else {
         delete newUserVotes[item];
       }
 
-      setVotes(prev => ({ ...prev, [item]: newVotes }));
+      setVotes((prev) => ({ ...prev, [item]: newVotes }));
       setUserVotes(newUserVotes);
 
-      const response = await axios.post(
-        "http://localhost:5000/vote",
+      const response = await axiosInstance.post(
+        "/vote",
         { item, type, day, timestamp: Date.now() },
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
 
       if (response.data.success) {
-        setVotes(prev => ({
+        setVotes((prev) => ({
           ...prev,
-          [item]: response.data.votes || prev[item]
+          [item]: response.data.votes || prev[item],
         }));
         setUserVotes(response.data.userVotes || newUserVotes);
       } else {
@@ -206,7 +215,7 @@ const Home = () => {
         setError("Failed to record vote after retries. Data refreshed.");
       }
     } finally {
-      setProcessingVotes(prev => ({ ...prev, [item]: false }));
+      setProcessingVotes((prev) => ({ ...prev, [item]: false }));
     }
   };
 
@@ -247,14 +256,10 @@ const Home = () => {
       <div className="header">
         <div className="header-content">
           <div className="header-left">
-            <div className="app-icon">
-              🍽️
-            </div>
-            <h1 className="app-title">
-              Campus GrubHub
-            </h1>
+            <div className="app-icon">🍽️</div>
+            <h1 className="app-title">Campus GrubHub</h1>
           </div>
-          
+
           {user && (
             <div className="user-info">
               <img
@@ -262,21 +267,19 @@ const Home = () => {
                 alt="Profile"
                 className="user-avatar"
               />
-              <span className="user-name">
-                {user.displayName || "User"}
-              </span>
+              <span className="user-name">{user.displayName || "User"}</span>
             </div>
           )}
         </div>
         {/* Floating Icons */}
-        {floatingIcons.map(icon => (
-          <span 
+        {floatingIcons.map((icon) => (
+          <span
             key={icon.id}
-            className=" floating-icon"
+            className="floating-icon"
             style={{
               left: icon.left,
-              bottom: '10px',
-              '--random-rotation': icon.rotation
+              bottom: "10px",
+              "--random-rotation": icon.rotation,
             }}
           >
             {icon.icon}
@@ -319,22 +322,16 @@ const Home = () => {
                   <h3 className="welcome-text">
                     Welcome back, {user.displayName || "User"}! 👋
                   </h3>
-                  <p className="user-email">
-                    {user.email}
-                  </p>
+                  <p className="user-email">{user.email}</p>
                 </div>
               </div>
-              
+
               <div className="action-buttons">
                 <Link to="/stats" className="action-link">
-                  <button className="stats-btn">
-                    📊 View Stats
-                  </button>
+                  <button className="stats-btn">📊 View Stats</button>
                 </Link>
                 <Link to="/auntys-cafe" className="action-link">
-                  <button className="cafe-btn">
-                    ☕ Aunty's Cafe
-                  </button>
+                  <button className="cafe-btn">☕ Aunty's Cafe</button>
                 </Link>
                 <button onClick={handleLogout} className="logout-btn">
                   🚪 Sign Out
@@ -346,12 +343,8 @@ const Home = () => {
 
         {/* Date and Title */}
         <div className="page-header">
-          <h2 className="page-date">
-            🗓 {day || "Loading..."}
-          </h2>
-          <h1 className="page-title">
-            📅 Mess Menu
-          </h1>
+          <h2 className="page-date">🗓 {day || "Loading..."}</h2>
+          <h1 className="page-title">📅 Mess Menu</h1>
         </div>
 
         {/* Loading Indicator */}
@@ -364,9 +357,7 @@ const Home = () => {
 
         {/* Daily Quote */}
         <div className="quote-card">
-          <h3 className="quote-title">
-            ✨ Daily Inspiration
-          </h3>
+          <h3 className="quote-title">✨ Daily Inspiration</h3>
           <p className="quote-text">
             "{quote || "Loading your daily dose of inspiration..."}"
           </p>
@@ -385,21 +376,25 @@ const Home = () => {
                 {(menu[meal] || []).map((item, i) => {
                   const userVoted = userVotes[item];
                   const isProcessing = processingVotes[item];
-                  
+
                   return (
                     <li key={i} className="menu-item">
                       <span className="item-name">🍴 {item}</span>
                       <div className="vote-section">
                         <button
                           onClick={() => handleVoteClick(item, "like")}
-                          className={`vote-btn like-btn ${userVoted === "like" ? "voted" : ""}`}
+                          className={`vote-btn like-btn ${
+                            userVoted === "like" ? "voted" : ""
+                          }`}
                           disabled={!user || isProcessing}
                         >
                           {isProcessing ? "⌛" : "👍"}
                         </button>
                         <button
                           onClick={() => handleVoteClick(item, "dislike")}
-                          className={`vote-btn dislike-btn ${userVoted === "dislike" ? "voted" : ""}`}
+                          className={`vote-btn dislike-btn ${
+                            userVoted === "dislike" ? "voted" : ""
+                          }`}
                           disabled={!user || isProcessing}
                         >
                           {isProcessing ? "⌛" : "👎"}
@@ -418,25 +413,26 @@ const Home = () => {
 
         {/* Leaderboard */}
         <div className="leaderboard-card">
-          <h2 className="leaderboard-title">
-            🏆 Community Leaderboard
-          </h2>
+          <h2 className="leaderboard-title">🏆 Community Leaderboard</h2>
           {leaderboard.length > 0 ? (
             <div className="leaderboard-list">
               {leaderboard.map(({ _id, count }, i) => (
-                <div key={i} className={`leaderboard-item ${i < 3 ? "top-three" : ""}`}>
+                <div
+                  key={i}
+                  className={`leaderboard-item ${i < 3 ? "top-three" : ""}`}
+                >
                   <span className="rank">
-                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
                   </span>
                   <span className="leaderboard-name">{_id}</span>
-                  <span className="vote-count-leader">
-                    {count} votes
-                  </span>
+                  <span className="vote-count-leader">{count} votes</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="no-leaderboard-text">No voting data available yet. Be the first to vote!</p>
+            <p className="no-leaderboard-text">
+              No voting data available yet. Be the first to vote!
+            </p>
           )}
         </div>
       </div>
@@ -445,16 +441,17 @@ const Home = () => {
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-brand">
-            <div className="footer-icon">
-              🍽️
-            </div>
-            <h3 className="footer-title">
-              Campus GrubHub
-            </h3>
+            <div className="footer-icon">🍽️</div>
+            <h3 className="footer-title">Campus GrubHub</h3>
           </div>
           <p className="footer-text">
             © 2025 Campus GrubHub Team. All rights reserved.
           </p>
+          <span>
+            <a href="/About" className="underline text-green-950 hover:text-white">
+              About Us
+            </a>
+          </span>
         </div>
       </footer>
     </div>

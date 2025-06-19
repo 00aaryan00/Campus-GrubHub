@@ -27,7 +27,7 @@ export const useGlobalNotifications = (userEmail = null, isAdmin = false) => {
 
         // 1. SETUP MENU NOTIFICATIONS (for ALL users - admin and customers)
         const menuQuery = query(
-          collection(db, 'menuItems'),
+          collection(db, 'SpecialMenu'),
           orderBy('createdAt', 'desc')
         );
 
