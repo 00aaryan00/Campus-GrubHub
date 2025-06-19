@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../firebase';
 import { NotificationManager } from '../utils/notifications';
-import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 import './UserOrderSummary.css';
 
 const UserOrderSummary = () => {
@@ -12,52 +11,8 @@ const UserOrderSummary = () => {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // FIXED: Properly use the notifications hook for customers
-  const { showToast } = useRealtimeNotifications(
-    true, // enableOrderNotifications
-    user?.email || null, // userEmail - pass the current user's email
-    false // isAdmin - false for customers
-  );
-
-  useEffect(() => {
-    const initializeComponent = async () => {
-      try {
-        const permissionGranted = await NotificationManager.requestPermission();
-        if (permissionGranted) {
-          console.log('Notification permissions granted for order updates');
-          NotificationManager.showToast('Notifications enabled for order updates', 'success');
-        } else {
-          console.log('Notification permissions denied');
-          NotificationManager.showToast('Enable notifications to get order updates', 'warning');
-        }
-      } catch (error) {
-        console.error('Error requesting notification permission:', error);
-      }
-    };
-
-    initializeComponent();
-  }, []);
-
-  useEffect(() => {
-    const auth = getAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-
-      if (currentUser) {
-        // REMOVED: Manual setup since the hook handles this now
-        fetchUserOrders(currentUser.email);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Simplified to just fetch initial orders since real-time updates are handled by the hook
-  const fetchUserOrders = async (userEmail) => {
+  // Memoized fetch function to prevent unnecessary re-renders
+  const fetchUserOrders = useCallback(async (userEmail) => {
     try {
       const q = query(
         collection(db, 'preOrders'),
@@ -71,7 +26,9 @@ const UserOrderSummary = () => {
       }));
       setOrders(userOrders);
     } catch (error) {
+      console.error('Error fetching orders with orderBy:', error);
       try {
+        // Fallback query without orderBy
         const fallbackQuery = query(
           collection(db, 'preOrders'),
           where('userEmail', '==', userEmail)
@@ -83,12 +40,66 @@ const UserOrderSummary = () => {
         }));
         setOrders(fallbackOrders);
       } catch (fallbackError) {
+        console.error('Error fetching orders (fallback):', fallbackError);
         NotificationManager.showToast("Error loading orders", "error");
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Authentication listener
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+
+      if (currentUser) {
+        fetchUserOrders(currentUser.email);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [fetchUserOrders]);
+
+  // Listen for real-time updates from global notification system
+  useEffect(() => {
+    if (!user?.email) return;
+
+    const handleGlobalOrderUpdate = (e) => {
+      if (e.key === 'orderUpdate' && e.newValue) {
+        try {
+          const updateData = JSON.parse(e.newValue);
+          // Only refresh if this update is for the current user
+          if (updateData.userEmail === user.email) {
+            fetchUserOrders(user.email);
+          }
+        } catch (error) {
+          console.error('Error parsing order update:', error);
+        }
+      }
+    };
+
+    // Listen for updates from the global notification system
+    window.addEventListener('storage', handleGlobalOrderUpdate);
+    
+    // Also listen for custom events from the global system
+    const handleCustomOrderUpdate = (e) => {
+      if (e.detail?.userEmail === user.email) {
+        fetchUserOrders(user.email);
+      }
+    };
+    
+    window.addEventListener('orderStatusUpdate', handleCustomOrderUpdate);
+
+    return () => {
+      window.removeEventListener('storage', handleGlobalOrderUpdate);
+      window.removeEventListener('orderStatusUpdate', handleCustomOrderUpdate);
+    };
+  }, [user?.email, fetchUserOrders]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -129,6 +140,15 @@ const UserOrderSummary = () => {
     }
   };
 
+  // Manual refresh with loading state
+  const handleRefresh = async () => {
+    if (user?.email && !loading) {
+      setLoading(true);
+      await fetchUserOrders(user.email);
+    }
+  };
+
+  // Loading states
   if (authLoading) {
     return (
       <div className="orders-container">
@@ -176,6 +196,13 @@ const UserOrderSummary = () => {
             <div className="orders-notifications-status">
               🔔 <span>Real-time updates enabled</span>
             </div>
+            <button 
+              onClick={handleRefresh}
+              className="refresh-btn"
+              disabled={loading}
+            >
+              {loading ? '🔄 Refreshing...' : '🔄 Refresh'}
+            </button>
           </div>
         </div>
 

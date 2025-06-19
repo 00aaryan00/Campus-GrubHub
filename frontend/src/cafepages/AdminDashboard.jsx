@@ -1,57 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import { NotificationManager } from "../utils/notifications"; // Add this import
-import { useMenuNotifications } from "../hooks/useRealtimeNotifications"; // Add this import
+import { NotificationManager } from "../utils/notifications";
 
 export default function AdminDashboard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [previousItems, setPreviousItems] = useState([]); // Track previous state for new dish detection
-  const today = new Date().toISOString().slice(0, 10);
-  
-  // Use the menu notifications hook
-  const { notifyNewDish, notifyMenuUpdate } = useMenuNotifications();
+  const [previousItems, setPreviousItems] = useState([]);
+
+  // REMOVED: Manual notification permission request - handled by AppWrapper
+  // REMOVED: useMenuNotifications hook - global system handles all notifications
 
   // Load existing menu on mount
   useEffect(() => {
-    const initializeComponent = async () => {
-      // Request notification permission when component mounts
-      try {
-        const permissionGranted = await NotificationManager.requestPermission();
-        if (permissionGranted) {
-          console.log('Notification permissions granted');
-          NotificationManager.showToast('Notifications enabled for menu updates', 'success');
-        } else {
-          console.log('Notification permissions denied');
-          NotificationManager.showToast('Enable notifications for better experience', 'warning');
-        }
-      } catch (error) {
-        console.error('Error requesting notification permission:', error);
-      }
-
-      // Fetch existing menu
-      await fetchMenu();
-    };
-
-    initializeComponent();
+    fetchMenu();
   }, []);
 
-  const fetchMenu = async () => {
+  const fetchMenu = useCallback(async () => {
     try {
       setLoading(true);
       const res = await axios.get("http://localhost:5000/auntys-cafe/admin-dashboard");
       console.log("Fetched menu items:", res.data.items);
       const fetchedItems = res.data.items || [];
       setItems(fetchedItems);
-      setPreviousItems(fetchedItems); // Store for comparison
+      setPreviousItems(fetchedItems);
     } catch (err) {
       console.error("Error fetching admin menu:", err);
       NotificationManager.showToast("Error loading menu items", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleAddItem = () => {
     const newItem = { name: "", price: "", veg: true, available: true, isNew: true };
@@ -79,17 +58,11 @@ export default function AdminDashboard() {
       // Update the UI immediately
       setItems(prevItems => prevItems.filter(item => item.name !== name));
       
-      // Show success notifications
-      NotificationManager.showNotification(
-        `🗑️ Dish Removed: ${name}`,
-        {
-          body: `${name} has been removed from today's menu`,
-          tag: `deleted-dish-${name}`,
-          requireInteraction: false
-        }
-      );
-      
+      // Show success feedback (global system will handle notifications to users)
       NotificationManager.showToast(`Successfully deleted "${name}"`, "success");
+
+      // REMOVED: Manual browser notifications - global system handles these
+      
     } catch (err) {
       console.error("Delete error:", err);
 
@@ -131,81 +104,82 @@ export default function AdminDashboard() {
     );
   };
 
-  const handleSubmit = async () => {
-    try {
-      setLoading(true);
+  // In AdminDashboard.js - Fixed handleSubmit function
+const handleSubmit = async () => {
+  try {
+    setLoading(true);
 
-      // Validate items before submitting
-      const validItems = items.filter(item =>
-        item.name && item.name.trim() !== "" && item.price > 0
-      );
+    // Validate items before submitting
+    const validItems = items.filter(item =>
+      item.name && item.name.trim() !== "" && item.price > 0
+    );
 
-      if (validItems.length === 0) {
-        NotificationManager.showToast("Please add at least one valid item with name and price.", "warning");
-        return;
-      }
-
-      // Detect new items before submitting
-      const newItems = detectNewItems(validItems, previousItems);
-
-      console.log("Submitting items:", validItems);
-      console.log("New items detected:", newItems);
-
-      const response = await axios.post("http://localhost:5000/auntys-cafe/admin-dashboard", {
-        items: validItems
-      });
-
-      console.log("Submit response:", response.data);
-
-      // Show notifications for new items
-      if (newItems.length > 0) {
-        // Show individual notifications for each new dish
-        newItems.forEach((item, index) => {
-          setTimeout(() => {
-            notifyNewDish(item.name, item.price, item.veg);
-          }, index * 1000); // Stagger notifications by 1 second
-        });
-
-        // Show summary toast
-        if (newItems.length === 1) {
-          NotificationManager.showToast(
-            `New dish "${newItems[0].name}" added to today's menu!`,
-            'success'
-          );
-        } else {
-          NotificationManager.showToast(
-            `${newItems.length} new dishes added to today's menu!`,
-            'success'
-          );
-        }
-      }
-
-      // General success notification
-      notifyMenuUpdate(validItems.length);
-
-      // Update previous items for next comparison
-      setPreviousItems(validItems);
-
-      // Remove the isNew flag from items
-      setItems(validItems.map(item => ({ ...item, isNew: false })));
-
-    } catch (err) {
-      console.error("Submit error:", err);
-      
-      let errorMessage = "Unknown error occurred";
-      if (err.response) {
-        errorMessage = err.response.data.error || 'Server error';
-      } else if (err.request) {
-        errorMessage = "No response from server";
-      } else {
-        errorMessage = err.message;
-      }
-
-      NotificationManager.showToast(`Error updating menu: ${errorMessage}`, "error");
-    } finally {
-      setLoading(false);
+    if (validItems.length === 0) {
+      NotificationManager.showToast("Please add at least one valid item with name and price.", "warning");
+      return;
     }
-  };
+
+    // Detect new items for notifications
+    const newItems = detectNewItems(validItems, previousItems);
+
+    console.log("Submitting items:", validItems);
+    console.log("New items detected:", newItems);
+
+    const response = await axios.post("http://localhost:5000/auntys-cafe/admin-dashboard", {
+      items: validItems
+    });
+
+    console.log("Submit response:", response.data);
+
+    // Show admin feedback
+    if (newItems.length > 0) {
+      if (newItems.length === 1) {
+        NotificationManager.showToast(
+          `New dish "${newItems[0].name}" added to today's menu!`,
+          'success'
+        );
+      } else {
+        NotificationManager.showToast(
+          `${newItems.length} new dishes added to today's menu!`,
+          'success'
+        );
+      }
+
+      // FIX: Actually notify users about new dishes
+      newItems.forEach(dish => {
+        NotificationManager.showNewDishNotification(dish, false); // false = not admin
+      });
+    }
+
+    // General success feedback
+    NotificationManager.showToast(
+      `Menu updated successfully with ${validItems.length} items`,
+      'success'
+    );
+
+    // Update previous items for next comparison
+    setPreviousItems(validItems);
+
+    // Remove the isNew flag from items
+    setItems(validItems.map(item => ({ ...item, isNew: false })));
+
+  } catch (err) {
+    console.error("Submit error:", err);
+    
+    let errorMessage = "Unknown error occurred";
+    if (err.response) {
+      errorMessage = err.response.data.error || 'Server error';
+    } else if (err.request) {
+      errorMessage = "No response from server";
+    } else {
+      errorMessage = err.message;
+    }
+
+    NotificationManager.showToast(`Error updating menu: ${errorMessage}`, "error");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleAccessPreOrder = () => {
     // Navigate to the pre-order page
@@ -213,17 +187,7 @@ export default function AdminDashboard() {
     NotificationManager.showToast("Opening pre-orders management", "info");
   };
 
-  // Test notification function (you can remove this in production)
-  const testNotifications = () => {
-    NotificationManager.showNotification(
-      "🧪 Test Notification",
-      {
-        body: "This is a test notification to check if everything works!",
-        requireInteraction: false
-      }
-    );
-    NotificationManager.showToast("Test notification sent!", "info");
-  };
+  // REMOVED: Test notification function - not needed in production
 
   if (loading) {
     return (
@@ -239,24 +203,13 @@ export default function AdminDashboard() {
   return (
     <div style={{ padding: "20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2>Update Today's Special Menu</h2>
+        <div>
+          <h2>Update Today's Special Menu</h2>
+          <p style={{ color: "#666", fontSize: "14px", margin: "5px 0 0 0" }}>
+            🔔 Real-time notifications enabled - users will be notified of menu changes
+          </p>
+        </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          {/* Test notification button (remove in production) */}
-          <button 
-            onClick={testNotifications}
-            style={{ 
-              padding: "8px 16px",
-              backgroundColor: "#6b7280",
-              color: "white",
-              border: "none",
-              borderRadius: "5px",
-              cursor: "pointer",
-              fontSize: "12px"
-            }}
-          >
-            Test Notifications
-          </button>
-          
           <button 
             onClick={handleAccessPreOrder}
             style={{ 
@@ -288,7 +241,7 @@ export default function AdminDashboard() {
             No menu items found. Click "Add Another Item" to start adding items.
           </p>
           <p style={{ color: "#888", fontSize: "14px", margin: "0" }}>
-            💡 Tip: You'll receive notifications when new dishes are added!
+            💡 Tip: Users will receive notifications when new dishes are added!
           </p>
         </div>
       )}
@@ -420,17 +373,38 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Enhanced Debug section */}
-      <div style={{ marginTop: "30px", padding: "15px", backgroundColor: "#f0f0f0", borderRadius: "8px" }}>
-        <h4 style={{ margin: "0 0 10px 0" }}>Debug Info:</h4>
+      {/* Status indicators */}
+      <div style={{ 
+        marginTop: "20px", 
+        padding: "15px", 
+        backgroundColor: "#e7f3ff", 
+        borderRadius: "8px",
+        border: "1px solid #b3d9ff"
+      }}>
+        <h4 style={{ margin: "0 0 10px 0", color: "#0066cc" }}>📊 Dashboard Status</h4>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", fontSize: "14px" }}>
-          <p><strong>Total items:</strong> {items.length}</p>
-          <p><strong>Items with names:</strong> {items.filter(item => item.name && item.name.trim() !== "").length}</p>
-          <p><strong>Valid items:</strong> {items.filter(item => item.name && item.name.trim() !== "" && item.price > 0).length}</p>
-          <p><strong>New items:</strong> {items.filter(item => item.isNew).length}</p>
-          <p><strong>Server URL:</strong> http://localhost:5000</p>
-          <p><strong>Notifications:</strong> {Notification.permission}</p>
+          <div><strong>Total items:</strong> {items.length}</div>
+          <div><strong>Valid items:</strong> {items.filter(item => item.name && item.name.trim() !== "" && item.price > 0).length}</div>
+          <div><strong>New items:</strong> {items.filter(item => item.isNew).length}</div>
+          <div><strong>Available items:</strong> {items.filter(item => item.available).length}</div>
+          <div><strong>Notifications:</strong> 
+            <span style={{ 
+              color: Notification.permission === 'granted' ? '#10b981' : '#ef4444',
+              fontWeight: 'bold',
+              marginLeft: '5px'
+            }}>
+              {Notification.permission === 'granted' ? '✅ Enabled' : '❌ Disabled'}
+            </span>
+          </div>
+          <div><strong>Global System:</strong> 
+            <span style={{ color: '#10b981', fontWeight: 'bold', marginLeft: '5px' }}>
+              ✅ Active
+            </span>
+          </div>
         </div>
+        <p style={{ margin: "10px 0 0 0", fontSize: "12px", color: "#666" }}>
+          💡 The global notification system automatically monitors menu changes and notifies all users in real-time.
+        </p>
       </div>
     </div>
   );

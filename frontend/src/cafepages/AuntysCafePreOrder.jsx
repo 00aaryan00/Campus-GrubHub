@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
+import { NotificationManager } from '../utils/notifications'; // ✅ IMPORT ADDED
 
 const PreOrderMenu = () => {
   const [menuItems, setMenuItems] = useState([]);
@@ -37,41 +38,61 @@ const PreOrderMenu = () => {
   };
 
   const handlePlaceOrder = async () => {
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) {
-      alert("Please login to place an order");
-      return;
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) {
+        alert("Please login to place an order");
+        return;
+      }
+
+      const { uid, email, displayName } = user;
+
+      setIsOrdering(true);
+
+      // ✅ CREATE ORDER DATA OBJECT
+      const orderData = {
+        itemName: selectedItem.name,
+        price: selectedItem.price,
+        quantity,
+        totalAmount: selectedItem.price * quantity,
+        userEmail: email || "",
+        userId: uid,
+        userName: displayName || "",
+        orderTime: serverTimestamp(),
+        paid: true,
+        status: "Pending",
+        pickupTime: null,
+        adminNotes: ""
+      };
+
+      // ✅ SAVE TO DATABASE
+      const docRef = await addDoc(collection(db, "preOrders"), orderData);
+
+      // ✅ TRIGGER ADMIN NOTIFICATION - This was missing!
+      const orderWithId = {
+        id: docRef.id,
+        ...orderData,
+        orderTime: new Date(), // Use current date for immediate notification
+      };
+
+      // Notify admin about new order
+      NotificationManager.showNewOrderNotification(orderWithId, true); // true = isAdmin
+
+      console.log('🔔 New order notification sent to admin:', {
+        orderId: docRef.id,
+        itemName: selectedItem.name,
+        customerEmail: email
+      });
+
+      setStep(3);
+    } catch (error) {
+      console.error("Error placing order:", error);
+      alert("Failed to place order.");
+    } finally {
+      setIsOrdering(false);
     }
-
-    const { uid, email, displayName } = user;
-
-    setIsOrdering(true);
-
-    await addDoc(collection(db, "preOrders"), {
-      itemName: selectedItem.name,
-      price: selectedItem.price,
-      quantity,
-      totalAmount: selectedItem.price * quantity,
-      userEmail: email || "", // fallback empty string if null
-      userId: uid,
-      userName: displayName || "", // also fallback if missing
-      orderTime: serverTimestamp(),
-      paid: true,
-      status: "Pending",
-      pickupTime: null,
-      adminNotes: ""
-    });
-
-    setStep(3);
-  } catch (error) {
-    console.error("Error placing order:", error);
-    alert("Failed to place order.");
-  } finally {
-    setIsOrdering(false);
-  }
-};
+  };
 
   return (
     <div className="p-4">

@@ -1,19 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
+import { toast } from 'react-hot-toast';
+import { NotificationManager } from '../utils/notifications';
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
   const [editingPickupTime, setEditingPickupTime] = useState({});
   const [editingNotes, setEditingNotes] = useState({});
 
-  // Setup real-time notifications for admin
-  const { showToast } = useRealtimeNotifications(
-    true, // enableOrderNotifications
-    null, // userEmail (null for admin)
-    true  // isAdmin
-  );
+  // ✅ REMOVED: useRealtimeNotifications hook (now handled globally)
+  // ✅ KEEPING: Direct toast usage for immediate admin action feedback
 
   const fetchOrders = async () => {
     try {
@@ -26,7 +23,8 @@ const AdminOrders = () => {
       setOrders(items);
     } catch (error) {
       console.error("Error fetching orders:", error);
-      showToast("Error fetching orders", 'error');
+      // ✅ Direct toast for admin feedback (not using showToast hook)
+      toast.error("Error fetching orders");
     }
   };
 
@@ -38,20 +36,27 @@ const AdminOrders = () => {
     try {
       await updateDoc(doc(db, 'preOrders', orderId), {
         status: newStatus,
-        statusUpdatedAt: new Date() // Track when status was updated
+        statusUpdatedAt: new Date()
       });
       
-      // Show immediate feedback to admin
+      // ✅ IMMEDIATE ACTION FEEDBACK - Admin sees confirmation right away
       const order = orders.find(o => o.id === orderId);
-      showToast(
+      toast.success(
         `Order ${order?.itemName} marked as ${newStatus}`,
-        newStatus === 'Rejected' ? 'error' : 'success'
+        { duration: 3000 }
       );
+      
+      // ✅ TRIGGER CUSTOMER NOTIFICATION - Global system will handle delivery
+      NotificationManager.notifyOrderStatusUpdate(orderId, newStatus, {
+        itemName: order?.itemName,
+        customerEmail: order?.userEmail,
+        pickupTime: order?.pickupTime
+      });
       
       fetchOrders();
     } catch (error) {
       console.error("Error updating status:", error);
-      showToast("Error updating order status", 'error');
+      toast.error("Error updating order status");
     }
   };
 
@@ -62,20 +67,27 @@ const AdminOrders = () => {
     try {
       await updateDoc(doc(db, 'preOrders', orderId), {
         pickupTime: newTime,
-        pickupTimeSetAt: new Date() // Track when pickup time was set
+        pickupTimeSetAt: new Date()
       });
       
+      // ✅ IMMEDIATE ACTION FEEDBACK
       const order = orders.find(o => o.id === orderId);
-      showToast(
+      toast.success(
         `Pickup time set for ${order?.itemName}: ${newTime}`,
-        'success'
+        { duration: 4000 }
       );
+      
+      // ✅ TRIGGER CUSTOMER NOTIFICATION - Customer will be notified of pickup time
+      NotificationManager.notifyPickupTimeSet(orderId, newTime, {
+        itemName: order?.itemName,
+        customerEmail: order?.userEmail
+      });
       
       setEditingPickupTime(prev => ({ ...prev, [orderId]: '' }));
       fetchOrders();
     } catch (error) {
       console.error("Error updating pickup time:", error);
-      showToast("Error updating pickup time", 'error');
+      toast.error("Error updating pickup time");
     }
   };
 
@@ -85,20 +97,30 @@ const AdminOrders = () => {
     try {
       await updateDoc(doc(db, 'preOrders', orderId), {
         adminNotes: notes || '',
-        notesUpdatedAt: new Date() // Track when notes were updated
+        notesUpdatedAt: new Date()
       });
       
+      // ✅ IMMEDIATE ACTION FEEDBACK
       const order = orders.find(o => o.id === orderId);
-      showToast(
+      toast.success(
         `Notes ${notes ? 'updated' : 'cleared'} for ${order?.itemName}`,
-        'success'
+        { duration: 3000 }
       );
+      
+      // ✅ OPTIONAL: Notify customer if notes are significant
+      if (notes && notes.length > 0) {
+        NotificationManager.notifyOrderUpdate(orderId, 'Admin added notes to your order', {
+          itemName: order?.itemName,
+          customerEmail: order?.userEmail,
+          notes: notes
+        });
+      }
       
       setEditingNotes(prev => ({ ...prev, [orderId]: '' }));
       fetchOrders();
     } catch (error) {
       console.error("Error updating notes:", error);
-      showToast("Error updating admin notes", 'error');
+      toast.error("Error updating admin notes");
     }
   };
 
@@ -122,7 +144,7 @@ const AdminOrders = () => {
       );
       if (shouldSetTime) {
         setEditingPickupTime(prev => ({ ...prev, [orderId]: '' }));
-        showToast("Please set a pickup time below before marking as ready", 'warning');
+        toast.warning("Please set a pickup time below before marking as ready", { duration: 5000 });
         return;
       }
     }
@@ -163,7 +185,7 @@ const AdminOrders = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold">Admin - Pre-Orders</h2>
         <div className="text-sm text-gray-500">
-          🔔 Real-time notifications enabled
+          🔔 Global notifications active
         </div>
       </div>
 
