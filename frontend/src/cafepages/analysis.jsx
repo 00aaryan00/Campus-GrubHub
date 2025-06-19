@@ -5,24 +5,9 @@ import {
 } from 'recharts';
 import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw, Search, Coffee, Heart, ThumbsDown, Star, Calendar, Trophy } from 'lucide-react';
 
-// Firebase imports
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
-
-// Your Firebase config
-const firebaseConfig = {
-  apiKey: "AIzaSyCzGCo69CAjAQh6C6JfEO79JaQ6vi1vTPk",
-  authDomain: "campus-grubhub-9e02c.firebaseapp.com",
-  projectId: "campus-grubhub-9e02c",
-  storageBucket: "campus-grubhub-9e02c.firebasestorage.app",
-  messagingSenderId: "986274538780",
-  appId: "1:986274538780:web:3e5ee3ceb9aaccfe1586d9",
-  measurementId: "G-RNZDWXCJ61"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// Import Firebase from your existing firebase.js file
+import { db } from '../firebase'; // Adjust path as needed
+import { collection, getDocs } from 'firebase/firestore';
 
 // Updated cafe theme colors for pie chart with more variety
 const PIE_COLORS = ['#8B4513', '#DAA520', '#CD853F', '#D2691E', '#B8860B', '#A0522D', '#DEB887', '#F4A460', '#BC8F8F', '#C19A6B'];
@@ -209,10 +194,12 @@ const VoteAnalytics = () => {
   // Loading state with cafe theme
   if (loading) {
     return (
-      <div className="cafe-container initial-loading">
-        <div className="loading-card">
-          <div className="loading-spinner-small"></div>
-          <p className="processing-text">Brewing your analytics...</p>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 p-4">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md mx-auto">
+            <div className="animate-spin w-12 h-12 mx-auto mb-4 border-4 border-amber-200 border-t-amber-600 rounded-full"></div>
+            <p className="text-amber-800 text-lg font-semibold">Brewing your analytics...</p>
+          </div>
         </div>
       </div>
     );
@@ -221,16 +208,15 @@ const VoteAnalytics = () => {
   // Error state with cafe theme
   if (error) {
     return (
-      <div className="cafe-container initial-loading">
-        <div className="menu-item-card" style={{maxWidth: '500px'}}>
-          <div className="text-center">
-            <AlertCircle size={48} style={{color: '#8B4513', margin: '0 auto 1rem'}} />
-            <h2 className="item-name" style={{marginBottom: '1rem'}}>Oops! Something went wrong</h2>
-            <p style={{color: '#6b7280', marginBottom: '1.5rem'}}>{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 p-4">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md mx-auto">
+            <AlertCircle size={48} className="text-amber-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-amber-800 mb-4">Oops! Something went wrong</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
             <button 
               onClick={fetchFirebaseData}
-              className="order-button"
-              style={{position: 'static', transform: 'none'}}
+              className="inline-flex items-center px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors font-semibold"
             >
               <RefreshCw size={16} className="mr-2" />
               Try Again
@@ -246,44 +232,38 @@ const VoteAnalytics = () => {
   const dailyTrends = trends();
 
   return (
-    <div className="cafe-container">
-      {/* Smaller Header */}
-      <div className="cafe-header" style={{padding: '2rem 0'}}>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-amber-800 via-amber-700 to-orange-600 text-white py-12">
         <div className="container mx-auto px-4 text-center">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <Coffee size={32} className="text-white" />
-            <h1 className="text-3xl font-bold text-white">Aunty's Cafe Analytics</h1>
-            <Coffee size={32} className="text-white" />
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Coffee size={40} className="text-white" />
+            <h1 className="text-4xl font-bold">Aunty's Cafe Analytics</h1>
+            <Coffee size={40} className="text-white" />
           </div>
-          <p className="text-lg text-orange-100 mb-4">Discover what our customers love most ☕</p>
+          <p className="text-xl text-orange-100 mb-6">Discover what our customers love most ☕</p>
           
-          <div className="flex justify-center gap-3">
-            <button 
-              onClick={fetchFirebaseData}
-              className="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-white text-sm"
-              disabled={loading}
-            >
-              <RefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} size={14} />
-              Refresh Data
-            </button>
-               
-          </div>
+          <button 
+            onClick={fetchFirebaseData}
+            className="inline-flex items-center px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-white font-semibold"
+            disabled={loading}
+          >
+            <RefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} size={18} />
+            Refresh Data
+          </button>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-8">
-       
-
         {/* Filters */}
-        <div className="menu-item-card mb-8">
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
-              <Calendar size={20} style={{color: '#8B4513'}} />
+              <Calendar size={20} className="text-amber-700" />
               <select 
                 value={timeRange} 
                 onChange={e => setTimeRange(e.target.value)}
-                className="feedback-input"
-                style={{minWidth: '150px'}}
+                className="px-4 py-2 border-2 border-amber-200 rounded-lg focus:border-amber-500 focus:outline-none"
               >
                 <option value="week">Last 7 days</option>
                 <option value="month">Last Month</option>
@@ -293,12 +273,11 @@ const VoteAnalytics = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <Filter size={20} style={{color: '#8B4513'}} />
+              <Filter size={20} className="text-amber-700" />
               <select 
                 value={filterType} 
                 onChange={e => setFilterType(e.target.value)}
-                className="feedback-input"
-                style={{minWidth: '150px'}}
+                className="px-4 py-2 border-2 border-amber-200 rounded-lg focus:border-amber-500 focus:outline-none"
               >
                 <option value="all">All Votes</option>
                 <option value="likes">Likes Only</option>
@@ -310,28 +289,28 @@ const VoteAnalytics = () => {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="menu-item-card text-center">
-            <Users size={32} style={{color: '#8B4513', margin: '0 auto 1rem'}} />
-            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Total Votes</h3>
-            <div className="item-price" style={{margin: 0}}>{total}</div>
+          <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+            <Users size={32} className="text-amber-700 mx-auto mb-4" />
+            <h3 className="text-gray-600 text-sm font-semibold mb-2">Total Votes</h3>
+            <div className="text-3xl font-bold text-amber-800">{total}</div>
           </div>
           
-          <div className="menu-item-card text-center">
-            <Heart size={32} style={{color: '#16a34a', margin: '0 auto 1rem'}} />
-            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Total Likes</h3>
-            <div className="item-price" style={{margin: 0, color: '#16a34a'}}>{totalLikes}</div>
+          <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+            <Heart size={32} className="text-green-600 mx-auto mb-4" />
+            <h3 className="text-gray-600 text-sm font-semibold mb-2">Total Likes</h3>
+            <div className="text-3xl font-bold text-green-600">{totalLikes}</div>
           </div>
           
-          <div className="menu-item-card text-center">
-            <ThumbsDown size={32} style={{color: '#dc2626', margin: '0 auto 1rem'}} />
-            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Total Dislikes</h3>
-            <div className="item-price" style={{margin: 0, color: '#dc2626'}}>{totalDislikes}</div>
+          <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+            <ThumbsDown size={32} className="text-red-600 mx-auto mb-4" />
+            <h3 className="text-gray-600 text-sm font-semibold mb-2">Total Dislikes</h3>
+            <div className="text-3xl font-bold text-red-600">{totalDislikes}</div>
           </div>
           
-          <div className="menu-item-card text-center">
-            <Award size={32} style={{color: '#DAA520', margin: '0 auto 1rem'}} />
-            <h3 style={{color: '#6B7280', marginBottom: '0.5rem'}}>Like Rate</h3>
-            <div className="item-price" style={{margin: 0, color: '#DAA520'}}>
+          <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+            <Award size={32} className="text-yellow-600 mx-auto mb-4" />
+            <h3 className="text-gray-600 text-sm font-semibold mb-2">Like Rate</h3>
+            <div className="text-3xl font-bold text-yellow-600">
               {total > 0 ? ((totalLikes / total) * 100).toFixed(1) : 0}%
             </div>
           </div>
@@ -339,18 +318,14 @@ const VoteAnalytics = () => {
 
         {/* Top Item Highlight */}
         {topItem && (
-          <div className="menu-item-card mb-8" style={{
-            background: 'linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #CD853F 100%)',
-            color: 'white',
-            borderLeft: '4px solid #DAA520'
-          }}>
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-2xl shadow-lg p-6 mb-8">
             <div className="flex items-center gap-4">
-              <Trophy size={48} style={{color: '#DAA520'}} />
+              <Trophy size={48} className="text-yellow-300" />
               <div>
-                <h2 className="item-name" style={{color: 'white', marginBottom: '0.5rem'}}>
+                <h2 className="text-2xl font-bold mb-2">
                   🏆 Most Popular: {topItem.item}
                 </h2>
-                <p style={{color: '#fed7aa', fontSize: '1.1rem'}}>
+                <p className="text-orange-100 text-lg">
                   {topItem.likes} likes • {topItem.dislikes} dislikes • {topItem.ratio.toFixed(1)}% positive
                 </p>
               </div>
@@ -361,8 +336,8 @@ const VoteAnalytics = () => {
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Votes per Item Chart */}
-          <div className="menu-item-card">
-            <h3 className="item-name mb-4">📊 Votes per Item</h3>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-amber-800 mb-4">📊 Votes per Item</h3>
             {counts.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={counts.slice(0, 10)}>
@@ -389,16 +364,16 @@ const VoteAnalytics = () => {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="empty-state" style={{height: '300px'}}>
-                <div className="empty-icon">📈</div>
-                <div className="empty-title">No voting data available</div>
+              <div className="flex flex-col items-center justify-center h-80 text-gray-500">
+                <div className="text-6xl mb-4">📈</div>
+                <div className="text-xl font-semibold">No voting data available</div>
               </div>
             )}
           </div>
 
-          {/* Popular Items Pie Chart with varied colors */}
-          <div className="menu-item-card">
-            <h3 className="item-name mb-4">🥧 Popular Items Distribution</h3>
+          {/* Popular Items Pie Chart */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-amber-800 mb-4">🥧 Popular Items Distribution</h3>
             {counts.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -426,17 +401,17 @@ const VoteAnalytics = () => {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="empty-state" style={{height: '300px'}}>
-                <div className="empty-icon">🥧</div>
-                <div className="empty-title">No distribution data available</div>
+              <div className="flex flex-col items-center justify-center h-80 text-gray-500">
+                <div className="text-6xl mb-4">🥧</div>
+                <div className="text-xl font-semibold">No distribution data available</div>
               </div>
             )}
           </div>
         </div>
 
         {/* Daily Trends Chart */}
-        <div className="menu-item-card mb-8">
-          <h3 className="item-name mb-4">📈 Daily Voting Trends</h3>
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+          <h3 className="text-xl font-bold text-amber-800 mb-4">📈 Daily Voting Trends</h3>
           {dailyTrends.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={dailyTrends}>
@@ -468,16 +443,16 @@ const VoteAnalytics = () => {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{height: '300px'}}>
-              <div className="empty-icon">📈</div>
-              <div className="empty-title">No trend data available</div>
+            <div className="flex flex-col items-center justify-center h-80 text-gray-500">
+              <div className="text-6xl mb-4">📈</div>
+              <div className="text-xl font-semibold">No trend data available</div>
             </div>
           )}
         </div>
 
         {/* Filtered Items Overview */}
-        <div className="menu-item-card mb-8">
-          <h3 className="item-name mb-6">☕ Filtered Items Overview ({timeRange})</h3>
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+          <h3 className="text-xl font-bold text-amber-800 mb-6">☕ Filtered Items Overview ({timeRange})</h3>
           
           {counts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -485,9 +460,7 @@ const VoteAnalytics = () => {
                 const dishStats = dishVoteData.find(d => d.item.toLowerCase() === item.item.toLowerCase());
                 
                 return (
-                  <div key={index} className="p-4 rounded-lg border-2 border-amber-200" style={{
-                    background: 'linear-gradient(135deg, #FFF8DC 0%, #FFFACD 100%)'
-                  }}>
+                  <div key={index} className="p-4 rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
                     <h4 className="font-bold text-amber-800 text-lg mb-3 truncate" title={item.item}>{item.item}</h4>
                     
                     <div className="space-y-2">
@@ -515,10 +488,10 @@ const VoteAnalytics = () => {
               })}
             </div>
           ) : (
-            <div className="empty-state">
-              <div className="empty-icon">☕</div>
-              <div className="empty-title">No items found</div>
-              <div className="empty-subtitle">
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="text-6xl mb-4">☕</div>
+              <div className="text-xl font-semibold mb-2">No items found</div>
+              <div className="text-gray-400">
                 No cafe items have votes in the selected time range. Try expanding your filter!
               </div>
             </div>
@@ -526,16 +499,15 @@ const VoteAnalytics = () => {
         </div>
 
         {/* All-Time Dish Statistics with Search */}
-        <div className="menu-item-card">
+        <div className="bg-white rounded-2xl shadow-lg p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <h3 className="item-name">🍽️ All-Time Dish Statistics</h3>
+            <h3 className="text-xl font-bold text-amber-800">🍽️ All-Time Dish Statistics</h3>
             <div className="flex items-center gap-2">
-              <Search size={20} style={{color: '#8B4513'}} />
+              <Search size={20} className="text-amber-700" />
               <input
                 type="text"
                 placeholder="Search dishes..."
-                className="feedback-input"
-                style={{minWidth: '200px'}}
+                className="px-4 py-2 border-2 border-amber-200 rounded-lg focus:border-amber-500 focus:outline-none min-w-[200px]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -550,9 +522,7 @@ const VoteAnalytics = () => {
                 )
                 .sort((a, b) => (b.likes + b.dislikes) - (a.likes + a.dislikes))
                 .map((dish) => (
-                <div key={dish.id} className="p-4 rounded-lg border-2 border-amber-200" style={{
-                  background: 'linear-gradient(135deg, #FFF8DC 0%, #FFFACD 100%)'
-                }}>
+                <div key={dish.id} className="p-4 rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
                   <h4 className="font-bold text-amber-800 text-lg mb-3 truncate" title={dish.item}>{dish.item}</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -583,10 +553,10 @@ const VoteAnalytics = () => {
               ))}
             </div>
           ) : (
-            <div className="empty-state">
-              <div className="empty-icon">🍽️</div>
-              <div className="empty-title">No dish statistics available</div>
-              <div className="empty-subtitle">Start voting to see analytics here!</div>
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="text-6xl mb-4">🍽️</div>
+              <div className="text-xl font-semibold mb-2">No dish statistics available</div>
+              <div className="text-gray-400">Start voting to see analytics here!</div>
             </div>
           )}
         </div>

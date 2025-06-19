@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { NotificationManager } from "../utils/notifications";
-import { useMenuNotifications } from "../hooks/useRealtimeNotifications";
 import { v4 as uuidv4 } from "uuid";
+
 
 export default function AdminDashboard() {
   const [items, setItems] = useState([]);
@@ -12,7 +12,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDeletePopup, setShowDeletePopup] = useState(null);
   const today = new Date().toISOString().slice(0, 10);
-  const { notifyNewDish, notifyMenuUpdate } = useMenuNotifications();
+
 
   useEffect(() => {
     const initializeComponent = async () => {
