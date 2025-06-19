@@ -207,12 +207,12 @@ export const useGlobalNotifications = (userEmail = null, isAdmin = false) => {
                       handleStatusChangeNotification(order, previousState.status, order.status, isAdmin, userEmail);
                     }
 
-                    // Pickup time change
+                    // Pickup time change - FIXED LOGIC
                     if (previousState.pickupTime !== order.pickupTime && order.pickupTime) {
                       handlePickupTimeNotification(order, isAdmin, userEmail);
                     }
 
-                    // Admin notes change
+                    // Admin notes change - FIXED LOGIC
                     if (previousState.adminNotes !== order.adminNotes && order.adminNotes) {
                       handleAdminNotesNotification(order, isAdmin, userEmail);
                     }
@@ -254,9 +254,9 @@ export const useGlobalNotifications = (userEmail = null, isAdmin = false) => {
   };
 };
 
-// Enhanced notification handlers with better browser notifications
+// FIXED: Enhanced notification handlers with corrected logic
 const handleStatusChangeNotification = (order, oldStatus, newStatus, isAdmin, userEmail) => {
-  // Only notify the relevant user
+  // FIXED: Correct logic - notify if admin OR if it's the user's order
   if (!isAdmin && order.userEmail !== userEmail) return;
 
   const statusMessages = {
@@ -329,72 +329,110 @@ const handleStatusChangeNotification = (order, oldStatus, newStatus, isAdmin, us
   }
 };
 
+// FIXED: Pickup time notification with corrected logic
 const handlePickupTimeNotification = (order, isAdmin, userEmail) => {
-  // Only notify the relevant user
-  if (!isAdmin && order.userEmail !== userEmail) return;
-
-  const title = isAdmin ? '⏰ Pickup Time Set' : '⏰ Pickup Time Assigned!';
-  const body = isAdmin 
-    ? `Pickup time set for ${order.itemName}: ${order.pickupTime}`
-    : `Your ${order.itemName} pickup time: ${order.pickupTime}`;
-
-  // Browser notification
-  NotificationManager.showNotification(title, {
-    body: body,
-    tag: `pickup-time-${order.id}`,
-    requireInteraction: !isAdmin,
-    icon: '/favicon.ico',
-    persistent: true,
-    vibrate: isAdmin ? [100] : [200, 100, 200, 100, 200],
-    actions: !isAdmin ? [
-      {
-        action: 'set-reminder',
-        title: 'Set Reminder',
-        icon: '/icons/reminder.png'
-      },
-      {
-        action: 'view-order',
-        title: 'View Order',
-        icon: '/icons/view.png'
-      }
-    ] : undefined
+  console.log('🕐 Pickup time notification triggered:', {
+    orderId: order.id,
+    itemName: order.itemName,
+    pickupTime: order.pickupTime,
+    orderUserEmail: order.userEmail,
+    currentUserEmail: userEmail,
+    isAdmin: isAdmin
   });
 
-  if (document.visibilityState === 'visible') {
-    const message = isAdmin 
-      ? `Pickup time set for ${order.itemName}: ${order.pickupTime}`
-      : `⏰ Pickup time: ${order.pickupTime} for ${order.itemName}`;
-    NotificationManager.showToast(message, 'info');
+  // FIXED: Only notify if it's admin OR if it's the user's own order
+  if (isAdmin) {
+    // Admin notification
+    const title = '⏰ Pickup Time Set';
+    const body = `Pickup time set for ${order.itemName}: ${order.pickupTime}`;
+    
+    NotificationManager.showNotification(title, {
+      body: body,
+      tag: `pickup-time-admin-${order.id}`,
+      requireInteraction: false,
+      icon: '/favicon.ico',
+      vibrate: [100]
+    });
+
+    if (document.visibilityState === 'visible') {
+      NotificationManager.showToast(`Pickup time set for ${order.itemName}: ${order.pickupTime}`, 'info');
+    }
+  } else if (order.userEmail === userEmail) {
+    // Customer notification - FIXED: This should now work!
+    const title = '⏰ Pickup Time Assigned!';
+    const body = `Your ${order.itemName} pickup time: ${order.pickupTime}`;
+
+    console.log('🔔 Sending pickup time notification to customer:', title, body);
+
+    NotificationManager.showNotification(title, {
+      body: body,
+      tag: `pickup-time-customer-${order.id}`,
+      requireInteraction: true,
+      icon: '/favicon.ico',
+      persistent: true,
+      vibrate: [200, 100, 200, 100, 200],
+      actions: [
+        {
+          action: 'set-reminder',
+          title: 'Set Reminder',
+          icon: '/icons/reminder.png'
+        },
+        {
+          action: 'view-order',
+          title: 'View Order',
+          icon: '/icons/view.png'
+        }
+      ]
+    });
+
+    if (document.visibilityState === 'visible') {
+      NotificationManager.showToast(`⏰ Pickup time: ${order.pickupTime} for ${order.itemName}`, 'info');
+    }
   }
 };
 
+// FIXED: Admin notes notification with corrected logic
 const handleAdminNotesNotification = (order, isAdmin, userEmail) => {
-  // Only notify the customer (not admin)
-  if (isAdmin || order.userEmail !== userEmail) return;
-
-  // Browser notification
-  NotificationManager.showNotification('📝 Message from Cafe', {
-    body: `${order.itemName}: ${order.adminNotes}`,
-    tag: `notes-${order.id}`,
-    requireInteraction: true,
-    icon: '/favicon.ico',
-    persistent: true,
-    vibrate: [100, 50, 100, 50, 100],
-    actions: [
-      {
-        action: 'view-order',
-        title: 'View Order',
-        icon: '/icons/view.png'
-      },
-      {
-        action: 'reply',
-        title: 'Reply',
-        icon: '/icons/reply.png'
-      }
-    ]
+  console.log('📝 Admin notes notification triggered:', {
+    orderId: order.id,
+    itemName: order.itemName,
+    adminNotes: order.adminNotes,
+    orderUserEmail: order.userEmail,
+    currentUserEmail: userEmail,
+    isAdmin: isAdmin
   });
 
-  if (document.visibilityState === 'visible') {
-    NotificationManager.showToast(`📝 New message about your ${order.itemName}`, 'info');
+  // FIXED: Only notify customers about their own orders (not admin)
+  if (!isAdmin && order.userEmail === userEmail) {
+    const title = '📝 Message from Cafe';
+    const body = `${order.itemName}: ${order.adminNotes}`;
+
+    console.log('🔔 Sending admin notes notification to customer:', title, body);
+
+    // Browser notification
+    NotificationManager.showNotification(title, {
+      body: body,
+      tag: `notes-${order.id}`,
+      requireInteraction: true,
+      icon: '/favicon.ico',
+      persistent: true,
+      vibrate: [100, 50, 100, 50, 100],
+      actions: [
+        {
+          action: 'view-order',
+          title: 'View Order',
+          icon: '/icons/view.png'
+        },
+        {
+          action: 'reply',
+          title: 'Reply',
+          icon: '/icons/reply.png'
+        }
+      ]
+    });
+
+    if (document.visibilityState === 'visible') {
+      NotificationManager.showToast(`📝 New message about your ${order.itemName}`, 'info');
+    }
   }
 };

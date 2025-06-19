@@ -4,14 +4,25 @@ import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
 import { NotificationManager } from '../utils/notifications';
 
+import { useGlobalNotifications } from '../hooks/useGlobalNotifications'; // ✅ ADD THIS IMPORT
+
+
 const PreOrderMenu = () => {
   const [menuItems, setMenuItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [step, setStep] = useState(1);
   const [isOrdering, setIsOrdering] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // ✅ ENABLE GLOBAL NOTIFICATIONS FOR USER
+  useGlobalNotifications(user?.email, false); // false = not admin
 
   useEffect(() => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    setUser(currentUser);
+
     const fetchMenu = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, "specialMenu"));
@@ -25,6 +36,7 @@ const PreOrderMenu = () => {
         setMenuItems(items);
       } catch (error) {
         console.error("Error fetching menu:", error);
+        NotificationManager.showToast("Error loading menu items", "error");
       }
     };
 
@@ -37,58 +49,58 @@ const PreOrderMenu = () => {
     setStep(1);
   };
 
-  const handlePlaceOrder = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) {
-        alert("Please login to place an order");
-        return;
-      }
-
-      const { uid, email, displayName } = user;
-      setIsOrdering(true);
-
-      const orderData = {
-        itemName: selectedItem.name,
-        dishId: selectedItem.dishId,
-        price: selectedItem.price,
-        quantity,
-        totalAmount: selectedItem.price * quantity,
-        userEmail: email || "",
-        userId: uid,
-        userName: displayName || "",
-        orderTime: serverTimestamp(),
-        paid: true,
-        status: "Pending",
-        pickupTime: null,
-        adminNotes: ""
-      };
-
-      const docRef = await addDoc(collection(db, "preOrders"), orderData);
-
-      const orderWithId = {
-        id: docRef.id,
-        ...orderData,
-        orderTime: new Date(),
-      };
-
-      NotificationManager.showNewOrderNotification(orderWithId, true);
-
-      console.log('🔔 New order notification sent to admin:', {
-        orderId: docRef.id,
-        itemName: selectedItem.name,
-        customerEmail: email
-      });
-
-      setStep(3);
-    } catch (error) {
-      console.error("Error placing order:", error);
-      alert("Failed to place order.");
-    } finally {
-      setIsOrdering(false);
+const handlePlaceOrder = async () => {
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Please login to place an order");
+      return;
     }
-  };
+
+    const { uid, email, displayName } = user;
+    setIsOrdering(true);
+
+    const orderData = {
+      itemName: selectedItem.name,
+      dishId: selectedItem.dishId,
+      price: selectedItem.price,
+      quantity,
+      totalAmount: selectedItem.price * quantity,
+      userEmail: email || "",
+      userId: uid,
+      userName: displayName || "",
+      orderTime: serverTimestamp(),
+      paid: true,
+      status: "Pending",
+      pickupTime: null,
+      adminNotes: ""
+    };
+
+    const docRef = await addDoc(collection(db, "preOrders"), orderData);
+
+    const orderWithId = {
+      id: docRef.id,
+      ...orderData,
+      orderTime: new Date(),
+    };
+
+    NotificationManager.showNewOrderNotification(orderWithId, true);
+
+    console.log('🔔 New order notification sent to admin:', {
+      orderId: docRef.id,
+      itemName: selectedItem.name,
+      customerEmail: email
+    });
+
+    setStep(3);
+  } catch (error) {
+    console.error("Error placing order:", error);
+    alert("Failed to place order.");
+  } finally {
+    setIsOrdering(false);
+  }
+};
 
   const getItemIcon = (item) => {
     const name = item.name.toLowerCase();
@@ -127,6 +139,8 @@ const PreOrderMenu = () => {
           <h1 className="text-5xl font-bold mb-3">Aunty's Café</h1>
           <p className="text-xl text-amber-100 mb-4">Pre-Order Menu</p>
           <p className="text-amber-200">Order ahead, skip the wait, savor the moment</p>
+
+   
         </div>
 
         {/* Info Card */}

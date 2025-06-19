@@ -13,6 +13,8 @@ export default function AdminDashboard() {
   const [showDeletePopup, setShowDeletePopup] = useState(null);
   const today = new Date().toISOString().slice(0, 10);
 
+  // REMOVED: useMenuNotifications hook - global system handles all notifications
+
   useEffect(() => {
     const initializeComponent = async () => {
       try {
@@ -125,6 +127,7 @@ export default function AdminDashboard() {
         items: itemsWithAvailability,
       });
 
+      // Show admin feedback
       if (newItems.length > 0) {
         if (newItems.length === 1) {
           NotificationManager.showToast(
@@ -143,6 +146,7 @@ export default function AdminDashboard() {
         });
       }
 
+      // General success feedback
       NotificationManager.showToast(
         `Menu updated successfully with ${validItems.length} items`,
         'success'

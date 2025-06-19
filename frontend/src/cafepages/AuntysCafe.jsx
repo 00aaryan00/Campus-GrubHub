@@ -5,6 +5,9 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import "./AuntysCafe.css";
 
+// ADD THIS IMPORT - This is what was missing!
+import { useGlobalNotifications } from "../hooks/useGlobalNotifications";
+
 export default function AuntysCafe() {
   const [menu, setMenu] = useState([]);
   const [feedbacks, setFeedbacks] = useState({});
@@ -14,17 +17,22 @@ export default function AuntysCafe() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState(null); // ADD THIS
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserId(user.uid);
+        setUserEmail(user.email); // ADD THIS
       } else {
         navigate("/login");
       }
     });
     return () => unsubscribe();
   }, [navigate]);
+
+  // ADD THIS - Enable global notifications for customers
+  useGlobalNotifications(userEmail, false); // false = not admin
 
   useEffect(() => {
     if (!userId) return;
@@ -63,7 +71,7 @@ export default function AuntysCafe() {
       const response = await axios.post("http://localhost:5000/auntys-cafe/vote", {
         userId,
         dishName: itemName,
-        dishId: dishId || null, // Fallback to null if dishId is missing
+        dishId: dishId || null,
         vote: voteType,
       });
 
@@ -104,7 +112,7 @@ export default function AuntysCafe() {
       const response = await axios.post("http://localhost:5000/auntys-cafe/feedback", {
         userId,
         dishName: itemName,
-        dishId: dishId || null, // Fallback to null if dishId is missing
+        dishId: dishId || null,
         comment: comment.trim(),
       });
 
@@ -183,6 +191,18 @@ export default function AuntysCafe() {
           <div className="text-center mb-6">
             <h1 className="cafe-title">☕ Aunty's Cafe</h1>
             <p className="cafe-subtitle">Today's Special Menu - Homemade goodness, served with love</p>
+            {/* ADD THIS - Show notification status */}
+            <div className="notification-status" style={{
+              fontSize: '12px',
+              color: '#666',
+              marginTop: '5px',
+              padding: '3px 8px',
+              backgroundColor: '#f0f9ff',
+              borderRadius: '12px',
+              display: 'inline-block'
+            }}>
+              🔔 {Notification.permission === 'granted' ? 'Notifications enabled' : 'Enable notifications for menu updates'}
+            </div>
           </div>
           <div className="header-buttons">
             <button onClick={() => navigate("/analytics")} className="header-button">
@@ -195,6 +215,7 @@ export default function AuntysCafe() {
         </div>
       </div>
 
+      {/* Rest of your component remains the same */}
       <div className="container mx-auto px-4 py-8">
         <div className="tab-container">
           <div className="tab-wrapper">
