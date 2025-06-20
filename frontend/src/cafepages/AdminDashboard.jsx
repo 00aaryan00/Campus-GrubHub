@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import axios from "../api/axios";
 import { Link } from "react-router-dom";
 import { NotificationManager } from "../utils/notifications";
 import { v4 as uuidv4 } from "uuid";
