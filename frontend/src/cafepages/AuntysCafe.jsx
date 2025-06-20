@@ -78,9 +78,9 @@ export default function AuntysCafe() {
       try {
         setLoading(true);
         const [menuRes, votesRes, userVoteRes] = await Promise.all([
-          axios.get("http://localhost:5000/auntys-cafe/menu"),
-          axios.get("http://localhost:5000/auntys-cafe/dish-votes"),
-          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`),
+          axios.get("/auntys-cafe/menu"),
+          axios.get("/auntys-cafe/dish-votes"),
+          axios.get(`/auntys-cafe/user-votes/${userId}`),
         ]);
 
         setMenu(menuRes.data.items || []);
@@ -105,7 +105,7 @@ export default function AuntysCafe() {
 
     try {
       setLoading(true);
-      const response = await axios.post("http://localhost:5000/auntys-cafe/vote", {
+      const response = await axios.post("auntys-cafe/vote", {
         userId,
         dishName: itemName,
         dishId: dishId || null,
@@ -114,8 +114,8 @@ export default function AuntysCafe() {
 
       if (response.data.success) {
         const [votesRes, userVoteRes] = await Promise.all([
-          axios.get("http://localhost:5000/auntys-cafe/dish-votes"),
-          axios.get(`http://localhost:5000/auntys-cafe/user-votes/${userId}`),
+          axios.get("auntys-cafe/dish-votes"),
+          axios.get(`auntys-cafe/user-votes/${userId}`),
         ]);
 
         setVotes(votesRes.data.votes || {});
@@ -146,7 +146,7 @@ export default function AuntysCafe() {
       }
 
       setLoading(true);
-      const response = await axios.post("http://localhost:5000/auntys-cafe/feedback", {
+      const response = await axios.post("auntys-cafe/feedback", {
         userId,
         dishName: itemName,
         dishId: dishId || null,
@@ -156,7 +156,7 @@ export default function AuntysCafe() {
       if (response.data.success) {
         showToast("Feedback submitted successfully!", 'success');
         setFeedbacks({ ...feedbacks, [itemName]: "" });
-        const voteRes = await axios.get("http://localhost:5000/auntys-cafe/dish-votes");
+        const voteRes = await axios.get("auntys-cafe/dish-votes");
         setVotes(voteRes.data.votes || {});
       } else {
         throw new Error(response.data.error || "Feedback submission failed");

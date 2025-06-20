@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const NodeCache = require("node-cache"); // npm install node-cache
@@ -5,7 +6,18 @@ const { admin, db } = require("./firebaseAdmin");
 const cafeRoutes = require("./backedroutes");
 
 const app = express();
-app.use(cors());
+// For production (multiple allowed origins)
+const allowedOrigins = ['http://localhost:5173', 'https://campus-grub-hub.vercel.app/'];
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // Initialize caches
