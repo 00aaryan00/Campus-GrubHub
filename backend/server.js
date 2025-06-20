@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const NodeCache = require("node-cache"); // npm install node-cache
