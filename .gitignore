@@ -1,1 +1,3 @@
 backend/serviceAccount.json
+*.env 
+.env.local
