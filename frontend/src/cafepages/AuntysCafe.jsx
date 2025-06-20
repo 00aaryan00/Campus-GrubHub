@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import "./AuntysCafe.css";
 
-// ADD THIS IMPORT - This is what was missing!
+// Import the global notifications hook
 import { useGlobalNotifications } from "../hooks/useGlobalNotifications";
 
 export default function AuntysCafe() {
@@ -17,13 +17,14 @@ export default function AuntysCafe() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
-  const [userEmail, setUserEmail] = useState(null); // ADD THIS
+  const [userEmail, setUserEmail] = useState(null);
+  const [notificationStatus, setNotificationStatus] = useState('checking');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserId(user.uid);
-        setUserEmail(user.email); // ADD THIS
+        setUserEmail(user.email);
       } else {
         navigate("/login");
       }
@@ -31,8 +32,44 @@ export default function AuntysCafe() {
     return () => unsubscribe();
   }, [navigate]);
 
-  // ADD THIS - Enable global notifications for customers
-  useGlobalNotifications(userEmail, false); // false = not admin
+  // ENHANCED: Enable global notifications for customers with better status tracking
+  const { showNotification, showToast } = useGlobalNotifications(userEmail, false);
+
+  // ADDED: Check and request notification permission explicitly
+  useEffect(() => {
+    const checkNotificationPermission = async () => {
+      if (!('Notification' in window)) {
+        setNotificationStatus('not_supported');
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        setNotificationStatus('granted');
+        // Show a welcome notification for customers
+        showToast('🔔 You\'ll receive notifications about new menu items!', 'success');
+      } else if (Notification.permission === 'denied') {
+        setNotificationStatus('denied');
+      } else {
+        setNotificationStatus('default');
+        // Automatically request permission for better UX
+        try {
+          const permission = await Notification.requestPermission();
+          setNotificationStatus(permission);
+          if (permission === 'granted') {
+            showToast('🎉 Notifications enabled! You\'ll get alerts about new dishes', 'success');
+          }
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+          setNotificationStatus('denied');
+        }
+      }
+    };
+
+    // Only check permissions after user is authenticated
+    if (userEmail) {
+      checkNotificationPermission();
+    }
+  }, [userEmail, showToast]);
 
   useEffect(() => {
     if (!userId) return;
@@ -51,18 +88,18 @@ export default function AuntysCafe() {
         setUserVotes(userVoteRes.data.votes || {});
       } catch (err) {
         console.error("Error fetching data", err);
-        alert("Failed to load data. Please refresh the page.");
+        showToast("Failed to load data. Please refresh the page.", 'error');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [userId]);
+  }, [userId, showToast]);
 
   const handleVote = async (itemName, dishId, voteType) => {
     if (!userId) {
-      alert("Please log in to vote");
+      showToast("Please log in to vote", 'warning');
       return;
     }
 
@@ -83,13 +120,13 @@ export default function AuntysCafe() {
 
         setVotes(votesRes.data.votes || {});
         setUserVotes(userVoteRes.data.votes || {});
-        alert("Vote submitted successfully!");
+        showToast("Vote submitted successfully!", 'success');
       } else {
         throw new Error(response.data.error || "Voting failed");
       }
     } catch (err) {
       console.error("Vote error:", err);
-      alert(err.response?.data?.error || err.message || "Error voting");
+      showToast(err.response?.data?.error || err.message || "Error voting", 'error');
     } finally {
       setLoading(false);
     }
@@ -97,14 +134,14 @@ export default function AuntysCafe() {
 
   const handleFeedback = async (itemName, dishId) => {
     if (!userId) {
-      alert("Please log in to submit feedback");
+      showToast("Please log in to submit feedback", 'warning');
       return;
     }
 
     try {
       const comment = feedbacks[itemName];
       if (!comment || comment.trim() === "") {
-        alert("Please enter a valid comment.");
+        showToast("Please enter a valid comment.", 'warning');
         return;
       }
 
@@ -117,7 +154,7 @@ export default function AuntysCafe() {
       });
 
       if (response.data.success) {
-        alert("Feedback submitted successfully!");
+        showToast("Feedback submitted successfully!", 'success');
         setFeedbacks({ ...feedbacks, [itemName]: "" });
         const voteRes = await axios.get("http://localhost:5000/auntys-cafe/dish-votes");
         setVotes(voteRes.data.votes || {});
@@ -126,9 +163,32 @@ export default function AuntysCafe() {
       }
     } catch (err) {
       console.error("Feedback error:", err);
-      alert(err.response?.data?.error || err.message || "Error submitting feedback");
+      showToast(err.response?.data?.error || err.message || "Error submitting feedback", 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ADDED: Manual notification permission request
+  const requestNotificationPermission = async () => {
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationStatus(permission);
+      if (permission === 'granted') {
+        showToast('🎉 Notifications enabled! You\'ll get alerts about new dishes', 'success');
+        // Show a test notification
+        showNotification('🔔 Notifications Enabled!', {
+          body: 'You\'ll now receive updates about new menu items',
+          tag: 'permission-granted',
+          requireInteraction: false,
+          icon: '/favicon.ico'
+        });
+      } else {
+        showToast('Notifications permission denied. You can enable them in browser settings.', 'warning');
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      showToast('Error enabling notifications. Please try again.', 'error');
     }
   };
 
@@ -149,6 +209,42 @@ export default function AuntysCafe() {
     return isNaN(date.getTime()) ? "Just now" : date.toLocaleString();
   };
 
+  // ADDED: Get notification status display
+  const getNotificationStatusDisplay = () => {
+    switch (notificationStatus) {
+      case 'granted':
+        return {
+          text: '🔔 Notifications enabled',
+          color: '#10b981',
+          bgColor: '#d1fae5'
+        };
+      case 'denied':
+        return {
+          text: '🔕 Notifications disabled',
+          color: '#ef4444',
+          bgColor: '#fee2e2'
+        };
+      case 'default':
+        return {
+          text: '🔔 Click to enable notifications',
+          color: '#f59e0b',
+          bgColor: '#fef3c7'
+        };
+      case 'not_supported':
+        return {
+          text: '📱 Notifications not supported',
+          color: '#6b7280',
+          bgColor: '#f3f4f6'
+        };
+      default:
+        return {
+          text: '🔄 Checking notifications...',
+          color: '#6b7280',
+          bgColor: '#f3f4f6'
+        };
+    }
+  };
+
   if (loading && menu.length === 0) {
     return (
       <div className="initial-loading">
@@ -159,6 +255,8 @@ export default function AuntysCafe() {
       </div>
     );
   }
+
+  const notificationDisplay = getNotificationStatusDisplay();
 
   return (
     <div className="cafe-container">
@@ -191,18 +289,39 @@ export default function AuntysCafe() {
           <div className="text-center mb-6">
             <h1 className="cafe-title">☕ Aunty's Cafe</h1>
             <p className="cafe-subtitle">Today's Special Menu - Homemade goodness, served with love</p>
-            {/* ADD THIS - Show notification status */}
-            <div className="notification-status" style={{
-              fontSize: '12px',
-              color: '#666',
-              marginTop: '5px',
-              padding: '3px 8px',
-              backgroundColor: '#f0f9ff',
-              borderRadius: '12px',
-              display: 'inline-block'
-            }}>
-              🔔 {Notification.permission === 'granted' ? 'Notifications enabled' : 'Enable notifications for menu updates'}
+            
+            {/* ENHANCED: Better notification status display with click functionality */}
+            <div 
+              className="notification-status" 
+              style={{
+                fontSize: '12px',
+                color: notificationDisplay.color,
+                marginTop: '5px',
+                padding: '5px 12px',
+                backgroundColor: notificationDisplay.bgColor,
+                borderRadius: '15px',
+                display: 'inline-block',
+                cursor: notificationStatus === 'default' ? 'pointer' : 'default',
+                border: `1px solid ${notificationDisplay.color}20`,
+                transition: 'all 0.2s ease'
+              }}
+              onClick={notificationStatus === 'default' ? requestNotificationPermission : undefined}
+              title={notificationStatus === 'default' ? 'Click to enable notifications for new menu items' : ''}
+            >
+              {notificationDisplay.text}
             </div>
+            
+            {/* ADDED: Additional help text for denied permissions */}
+            {notificationStatus === 'denied' && (
+              <div style={{
+                fontSize: '10px',
+                color: '#6b7280',
+                marginTop: '2px',
+                fontStyle: 'italic'
+              }}>
+                Enable in browser settings to get new dish alerts
+              </div>
+            )}
           </div>
           <div className="header-buttons">
             <button onClick={() => navigate("/analytics")} className="header-button">
