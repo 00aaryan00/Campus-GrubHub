@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
 const NodeCache = require("node-cache"); // npm install node-cache
@@ -7,7 +8,21 @@ const cafeRoutes = require("./backedroutes");
 
 const app = express();
 // For production (multiple allowed origins)
-const allowedOrigins = ['http://localhost:5173', 'https://campus-grub-hub.vercel.app/'];
+// Configure allowed frontend origins:
+// - Local dev (Vite)
+// - Your deployed Vercel domain(s)
+// You can also set `CORS_ORIGINS` on Render as a comma-separated list, e.g.
+// CORS_ORIGINS=https://your-app.vercel.app,https://your-custom-domain.com
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  // NOTE: origin strings should NOT include trailing slashes
+  "https://campus-grub-hub.vercel.app",
+  ...(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+];
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -16,7 +31,7 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true
 }));
 app.use(express.json());
 
@@ -45,6 +60,20 @@ app.use(limiter);
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
+});
+
+// Render friendly endpoints (so visiting the Render URL doesn't show "Cannot GET /")
+app.get("/", (req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: "Campus-GrubHub API",
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).send("ok");
 });
 
 // Use Aunty's Café routes
@@ -542,7 +571,7 @@ if (!initialized) {
   initialized = true;
 }
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`✅ Backend running on http://localhost:${PORT}`);
 });

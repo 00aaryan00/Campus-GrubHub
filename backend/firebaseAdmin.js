@@ -1,12 +1,16 @@
-require('dotenv').config(); // MUST be at the very top
+const path = require("path");
+// Load backend/.env reliably (works even if process.cwd() is repo root)
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const admin = require("firebase-admin");
 
-// Debugging
-console.log('Environment variables loaded:', Object.keys(process.env).filter(k => k.startsWith('FIREBASE')));
-console.log('Private key exists:', !!process.env.FIREBASE_ADMIN_PRIVATE_KEY);
-console.log('Private key starts with:', process.env.FIREBASE_ADMIN_PRIVATE_KEY?.substring(0, 30));
-console.log('Private key starts with:', process.env.FIREBASE_ADMIN_PRIVATE_KEY.substring(0, 50));
-console.log('Private key length:', process.env.FIREBASE_ADMIN_PRIVATE_KEY.length);
+// Debugging (do NOT print secrets)
+const firebaseEnvKeys = Object.keys(process.env).filter((k) => k.startsWith("FIREBASE_"));
+console.log("Firebase env keys present:", firebaseEnvKeys);
+console.log("FIREBASE_ADMIN_PRIVATE_KEY exists:", !!process.env.FIREBASE_ADMIN_PRIVATE_KEY);
+console.log(
+  "FIREBASE_ADMIN_PRIVATE_KEY length:",
+  process.env.FIREBASE_ADMIN_PRIVATE_KEY ? process.env.FIREBASE_ADMIN_PRIVATE_KEY.length : 0
+);
 try {
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
   
@@ -52,8 +56,10 @@ try {
   console.error("❌ FATAL ERROR initializing Firebase Admin:");
   console.error(error.message);
   console.error("\nAdditional debugging info:");
-  console.error("Private key length:", process.env.FIREBASE_ADMIN_PRIVATE_KEY?.length);
-  console.error("First 50 chars:", process.env.FIREBASE_ADMIN_PRIVATE_KEY?.substring(0, 50));
-  console.error("Last 50 chars:", process.env.FIREBASE_ADMIN_PRIVATE_KEY?.slice(-50));
+  console.error("Firebase env keys present:", firebaseEnvKeys);
+  console.error(
+    "FIREBASE_ADMIN_PRIVATE_KEY length:",
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY ? process.env.FIREBASE_ADMIN_PRIVATE_KEY.length : 0
+  );
   process.exit(1);
 }
