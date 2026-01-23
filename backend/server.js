@@ -35,27 +35,85 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Trust proxy to get correct IP address (important for rate limiting)
+app.set('trust proxy', 1);
+
 // Initialize caches
 const menuCache = new NodeCache({ stdTTL: 3600 }); // 1 hour cache
 const votesCache = new NodeCache({ stdTTL: 300 }); // 5 minutes cache for votes
 const userVotesCache = new NodeCache({ stdTTL: 600 }); // 10 minutes cache for user votes
 const leaderboardCache = new NodeCache({ stdTTL: 900 }); // 15 minutes cache for leaderboard
 
-// Rate limiting
+// Rate limiting - more lenient in development
 const rateLimit = require("express-rate-limit");
+
+// Check if we're in production (explicitly set) or development (default)
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Skip rate limiting for localhost in development
+const skipRateLimit = (req, res) => {
+  if (isProduction) return false;
+  
+  // Check multiple ways to detect localhost
+  const hostname = req.hostname || req.get('host') || '';
+  const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || '';
+  
+  const isLocalhost = 
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.includes('localhost') ||
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip?.includes('127.0.0.1') ||
+    ip?.includes('::1');
+  
+  return isLocalhost;
+};
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // limit each IP to 50 requests per windowMs
-  message: "Too many requests from this IP, please try again later."
+  max: isProduction ? 50 : 1000, // Very high limit in dev, 50 in production
+  message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipRateLimit, // Skip entirely for localhost in dev
 });
 
+// More lenient rate limiting for local development
 const heavyLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10, // limit each IP to 10 requests per minute
-  message: "Rate limit exceeded for this endpoint."
+  max: isProduction ? 10 : 10000, // Effectively unlimited in dev, 10 in production
+  message: "Rate limit exceeded for this endpoint.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isProduction ? undefined : () => true, // Skip ALL rate limiting in dev
 });
 
-app.use(limiter);
+// Only apply global limiter in production, or use lenient version in dev
+if (isProduction) {
+  app.use(limiter);
+} else {
+  // In development, use a very lenient limiter that effectively doesn't limit
+  const devLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10000, // Effectively unlimited for dev
+    skip: () => true, // Skip all rate limiting in dev
+  });
+  app.use(devLimiter);
+}
+
+// Log rate limiter status on startup
+console.log('🚀 Rate Limiter Status:');
+console.log(`   Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+if (isProduction) {
+  console.log(`   Global Limiter: 50 req/15min`);
+  console.log(`   Heavy Limiter: 10 req/min`);
+} else {
+  console.log(`   Global Limiter: DISABLED (development mode)`);
+  console.log(`   Heavy Limiter: DISABLED (development mode)`);
+  console.log(`   ⚠️  Rate limiting is OFF for local development`);
+}
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import axiosInstance from "../api/axiosConfig";
 import { auth } from "../firebase";
@@ -24,6 +24,22 @@ const Home = () => {
   const [error, setError] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [floatingIcons, setFloatingIcons] = useState([]);
+  const isLoadingRef = useRef(false); // Prevent concurrent API calls
+  const dataCacheRef = useRef(dataCache); // Keep ref in sync with state
+  const dayRef = useRef(day); // Keep ref in sync with state
+  const hasInitializedRef = useRef(false); // Track if we've done initial load
+  const authProcessingRef = useRef(false); // Prevent multiple auth state processing
+  const lastSaveUserRef = useRef(null); // Track last save-user call time
+  const saveUserCooldown = 30000; // 30 seconds cooldown for save-user
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    dataCacheRef.current = dataCache;
+  }, [dataCache]);
+
+  useEffect(() => {
+    dayRef.current = day;
+  }, [day]);
 
   // Debounce utility to prevent rapid API calls
   const debounce = (func, wait) => {
@@ -57,15 +73,29 @@ const Home = () => {
 
   const loadInitialData = useCallback(
     async (forceRegular = false, forceRefresh = false) => {
+      // Prevent concurrent calls
+      if (isLoadingRef.current && !forceRefresh) {
+        console.log("Skipping loadInitialData - already loading");
+        return;
+      }
+
       try {
+        isLoadingRef.current = true;
         const now = Date.now();
+        
+        // Check cache using refs to get latest values without causing dependency issues
+        const currentCache = dataCacheRef.current;
+        const currentDay = dayRef.current;
         const shouldUseCache =
           !forceRefresh &&
-          dataCache.lastUpdated &&
-          now - dataCache.lastUpdated < dataCache.cacheDuration &&
-          dataCache.lastVoteDay === day;
+          currentCache.lastUpdated &&
+          now - currentCache.lastUpdated < currentCache.cacheDuration &&
+          currentCache.lastVoteDay === currentDay;
 
-        if (shouldUseCache && !forceRegular) return;
+        if (shouldUseCache && !forceRegular) {
+          isLoadingRef.current = false;
+          return;
+        }
 
         setLoading(true);
         setError(null);
@@ -90,20 +120,22 @@ const Home = () => {
         const votesData = menuResponse.data?.votes || {};
         const dayData = menuResponse.data?.day || "";
 
-        if (dataCache.lastVoteDay !== dayData) {
-          setUserVotes({});
-        }
+        setDataCache((prev) => {
+          if (prev.lastVoteDay !== dayData) {
+            setUserVotes({});
+          }
+          return {
+            ...prev,
+            lastUpdated: now,
+            lastVoteDay: dayData,
+          };
+        });
 
         setMenu(menuData);
         setVotes(votesData);
         setDay(dayData);
         setQuote(quoteResponse.data?.quote || "");
         setLeaderboard(leaderboardResponse.data || []);
-        setDataCache((prev) => ({
-          ...prev,
-          lastUpdated: now,
-          lastVoteDay: dayData,
-        }));
         if (userVotesResponse.data) {
           setUserVotes(userVotesResponse.data);
         }
@@ -113,9 +145,10 @@ const Home = () => {
       } finally {
         setLoading(false);
         setIsInitialLoad(false);
+        isLoadingRef.current = false;
       }
     },
-    [authToken, dataCache.lastVoteDay, day]
+    [authToken] // Removed dataCache and day from dependencies to prevent recreation loop
   );
 
   const debouncedLoadInitialData = useCallback(debounce(loadInitialData, 1000), [loadInitialData]);
@@ -124,37 +157,70 @@ const Home = () => {
     let isMounted = true;
     let lastAuthState = null;
 
+    // onAuthStateChanged fires immediately when set up, so it handles initial load
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return;
 
       const authStateKey = currentUser ? currentUser.uid : null;
-      if (lastAuthState === authStateKey) return;
+      
+      // Skip if same auth state AND we've already initialized (prevents duplicate calls)
+      if (lastAuthState === authStateKey && hasInitializedRef.current) {
+        return;
+      }
+      
+      // Prevent processing if already processing
+      if (authProcessingRef.current) {
+        console.log("Auth state change already processing, skipping...");
+        return;
+      }
+      
+      authProcessingRef.current = true;
       lastAuthState = authStateKey;
 
-      if (currentUser) {
-        setUser(currentUser);
-        try {
+      try {
+        if (currentUser) {
+          setUser(currentUser);
           const token = await currentUser.getIdToken(true);
           setAuthToken(token);
 
-          await axiosInstance.post(
-            "/save-user",
-            {},
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
+          // Only call save-user if we haven't initialized yet AND cooldown has passed
+          const now = Date.now();
+          const shouldCallSaveUser = 
+            !hasInitializedRef.current && 
+            (!lastSaveUserRef.current || (now - lastSaveUserRef.current) > saveUserCooldown);
+          
+          if (shouldCallSaveUser) {
+            // Call save-user but don't wait for it - fire and forget
+            axiosInstance.post(
+              "/save-user",
+              {},
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            ).catch((error) => {
+              // Silently ignore errors - this is non-critical
+              if (error.response?.status !== 429) {
+                console.error("Error saving user (non-critical):", error.message);
+              }
+            });
+            lastSaveUserRef.current = now;
+          }
 
           await loadInitialData(true);
-        } catch (error) {
-          console.error("Error setting up user:", error);
-          setError("Failed to initialize user data");
+          hasInitializedRef.current = true;
+        } else {
+          // User logged out - still need to load menu for non-authenticated view
+          setUser(null);
+          setAuthToken(null);
+          setUserVotes({});
+          await loadInitialData(true);
+          hasInitializedRef.current = true;
         }
-      } else {
-        setUser(null);
-        setAuthToken(null);
-        setUserVotes({});
-        await loadInitialData(true);
+      } catch (error) {
+        console.error("Error setting up user:", error);
+        setError("Failed to initialize user data");
+      } finally {
+        authProcessingRef.current = false;
       }
     });
 
@@ -235,9 +301,8 @@ const Home = () => {
     await debouncedLoadInitialData(true, true);
   };
 
-  useEffect(() => {
-    debouncedLoadInitialData();
-  }, [debouncedLoadInitialData]);
+  // REMOVED: Initial load useEffect - onAuthStateChanged handles ALL loading
+  // This prevents race conditions where both effects try to load simultaneously
 
   if (loading && isInitialLoad) {
     return (
