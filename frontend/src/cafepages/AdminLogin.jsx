@@ -20,7 +20,7 @@ export default function AdminLogin() {
     setError("");
     
     try {
-      const res = await axios.post("http://localhost:5000/auntys-cafe/admin-login", { 
+      const res = await axios.post("/auntys-cafe/admin-login", { 
         adminId, 
         password 
       });

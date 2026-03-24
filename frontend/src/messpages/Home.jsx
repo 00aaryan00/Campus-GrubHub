@@ -31,6 +31,7 @@ const Home = () => {
   const authProcessingRef = useRef(false); // Prevent multiple auth state processing
   const lastSaveUserRef = useRef(null); // Track last save-user call time
   const saveUserCooldown = 30000; // 30 seconds cooldown for save-user
+  const saveUserTimeoutRef = useRef(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -40,6 +41,14 @@ const Home = () => {
   useEffect(() => {
     dayRef.current = day;
   }, [day]);
+
+  useEffect(() => {
+    return () => {
+      if (saveUserTimeoutRef.current) {
+        clearTimeout(saveUserTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Debounce utility to prevent rapid API calls
   const debounce = (func, wait) => {
@@ -100,7 +109,7 @@ const Home = () => {
         setLoading(true);
         setError(null);
 
-        const [menuResponse, quoteResponse, leaderboardResponse, userVotesResponse] = await Promise.all([
+        const [menuResponse, quoteResponse, leaderboardResponse, userVotesResponse] = await Promise.allSettled([
           axiosInstance.get("/menu"),
           axiosInstance.get("/daily-quote"),
           axiosInstance.get("/leaderboard"),
@@ -111,14 +120,19 @@ const Home = () => {
             : Promise.resolve({ data: {} }),
         ]);
 
-        const menuData = menuResponse.data?.menu || {
+        if (menuResponse.status !== "fulfilled") {
+          throw menuResponse.reason;
+        }
+
+        const menuPayload = menuResponse.value?.data || {};
+        const menuData = menuPayload.menu || {
           breakfast: [],
           lunch: [],
           snacks: [],
           dinner: [],
         };
-        const votesData = menuResponse.data?.votes || {};
-        const dayData = menuResponse.data?.day || "";
+        const votesData = menuPayload.votes || {};
+        const dayData = menuPayload.day || "";
 
         setDataCache((prev) => {
           if (prev.lastVoteDay !== dayData) {
@@ -134,10 +148,11 @@ const Home = () => {
         setMenu(menuData);
         setVotes(votesData);
         setDay(dayData);
-        setQuote(quoteResponse.data?.quote || "");
-        setLeaderboard(leaderboardResponse.data || []);
-        if (userVotesResponse.data) {
-          setUserVotes(userVotesResponse.data);
+        setError(null);
+        setQuote(quoteResponse.status === "fulfilled" ? quoteResponse.value.data?.quote || "" : "");
+        setLeaderboard(leaderboardResponse.status === "fulfilled" ? leaderboardResponse.value.data || [] : []);
+        if (userVotesResponse.status === "fulfilled" && userVotesResponse.value.data) {
+          setUserVotes(userVotesResponse.value.data);
         }
       } catch (error) {
         console.error("Error loading data:", error);
@@ -180,7 +195,7 @@ const Home = () => {
       try {
         if (currentUser) {
           setUser(currentUser);
-          const token = await currentUser.getIdToken(true);
+          const token = await currentUser.getIdToken();
           setAuthToken(token);
 
           // Only call save-user if we haven't initialized yet AND cooldown has passed
@@ -190,19 +205,23 @@ const Home = () => {
             (!lastSaveUserRef.current || (now - lastSaveUserRef.current) > saveUserCooldown);
           
           if (shouldCallSaveUser) {
-            // Call save-user but don't wait for it - fire and forget
-            axiosInstance.post(
-              "/save-user",
-              {},
-              {
-                headers: { Authorization: `Bearer ${token}` },
-              }
-            ).catch((error) => {
-              // Silently ignore errors - this is non-critical
-              if (error.response?.status !== 429) {
-                console.error("Error saving user (non-critical):", error.message);
-              }
-            });
+            // Delay this non-critical request so it doesn't compete with first paint data.
+            if (saveUserTimeoutRef.current) {
+              clearTimeout(saveUserTimeoutRef.current);
+            }
+            saveUserTimeoutRef.current = setTimeout(() => {
+              axiosInstance.post(
+                "/save-user",
+                {},
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                }
+              ).catch((error) => {
+                if (error.response?.status !== 429) {
+                  console.error("Error saving user (non-critical):", error.message);
+                }
+              });
+            }, 1500);
             lastSaveUserRef.current = now;
           }
 

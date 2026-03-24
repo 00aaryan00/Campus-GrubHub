@@ -38,7 +38,7 @@ export default function AdminDashboard() {
   const fetchMenu = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:5000/auntys-cafe/admin-dashboard");
+      const res = await axios.get("/auntys-cafe/admin-dashboard");
       const fetchedItems = res.data.items || [];
       setItems(fetchedItems);
       setPreviousItems(fetchedItems);
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
   const handleDeleteItem = async (item) => {
     try {
       setLoading(true);
-      await axios.delete("http://localhost:5000/auntys-cafe/admin-dashboard", {
+      await axios.delete("/auntys-cafe/admin-dashboard", {
         data: { dishName: item.name, dishId: item.dishId },
       });
       setItems(items.filter((i) => i.dishId !== item.dishId));
@@ -123,7 +123,7 @@ export default function AdminDashboard() {
           : item.availabilityHistory || [{ availableFrom: new Date().toISOString(), availableTo: item.available ? null : new Date().toISOString() }],
       }));
 
-      const response = await axios.post("http://localhost:5000/auntys-cafe/admin-dashboard", {
+      const response = await axios.post("/auntys-cafe/admin-dashboard", {
         items: itemsWithAvailability,
       });
 

@@ -1,8 +1,12 @@
 import axios from "axios";
 
+const API_URL = import.meta.env.DEV
+  ? "http://localhost:5000"
+  : import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:5000",
-  timeout: 10000,
+  baseURL: API_URL,
+  timeout: 15000,
 });
 
 // Interceptor to handle 429 errors with exponential backoff

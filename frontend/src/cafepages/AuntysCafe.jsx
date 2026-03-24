@@ -18,14 +18,17 @@ export default function AuntysCafe() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+  const [authToken, setAuthToken] = useState(null);
   const [notificationStatus, setNotificationStatus] = useState('checking');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);
         setUserEmail(user.email);
+        setAuthToken(await user.getIdToken());
       } else {
+        setAuthToken(null);
         navigate("/login");
       }
     });
@@ -72,7 +75,7 @@ export default function AuntysCafe() {
   }, [userEmail, showToast]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !authToken) return;
 
     const fetchData = async () => {
       try {
@@ -80,7 +83,9 @@ export default function AuntysCafe() {
         const [menuRes, votesRes, userVoteRes] = await Promise.all([
           axios.get("/auntys-cafe/menu"),
           axios.get("/auntys-cafe/dish-votes"),
-          axios.get(`/auntys-cafe/user-votes/${userId}`),
+          axios.get(`/auntys-cafe/user-votes/${userId}`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          }),
         ]);
 
         setMenu(menuRes.data.items || []);
@@ -95,7 +100,7 @@ export default function AuntysCafe() {
     };
 
     fetchData();
-  }, [userId, showToast]);
+  }, [userId, authToken, showToast]);
 
   const handleVote = async (itemName, dishId, voteType) => {
     if (!userId) {
@@ -110,12 +115,16 @@ export default function AuntysCafe() {
         dishName: itemName,
         dishId: dishId || null,
         vote: voteType,
+      }, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
 
       if (response.data.success) {
         const [votesRes, userVoteRes] = await Promise.all([
           axios.get("auntys-cafe/dish-votes"),
-          axios.get(`auntys-cafe/user-votes/${userId}`),
+          axios.get(`auntys-cafe/user-votes/${userId}`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          }),
         ]);
 
         setVotes(votesRes.data.votes || {});
@@ -151,6 +160,8 @@ export default function AuntysCafe() {
         dishName: itemName,
         dishId: dishId || null,
         comment: comment.trim(),
+      }, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
 
       if (response.data.success) {

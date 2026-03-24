@@ -72,7 +72,7 @@ function Login() {
           errorMessage = "Invalid API key. Please check Firebase configuration.";
           break;
         case 'auth/unauthorized-domain':
-          errorMessage = "Domain not authorized. Please add localhost to Firebase authorized domains.";
+          errorMessage = "Domain not authorized. Please add this domain to Firebase Console > Authentication > Settings > Authorized domains.";
           break;
         default:
           errorMessage = `Error: ${error.message}`;
