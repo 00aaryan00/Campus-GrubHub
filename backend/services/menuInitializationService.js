@@ -38,24 +38,25 @@ async function initializeDishVotes() {
       return;
     }
 
-    const allDishes = new Set();
-    for (const dayMeals of Object.values(messMenu)) {
-      for (const items of Object.values(dayMeals)) {
-        for (const dish of items) {
-          allDishes.add(dish);
-        }
+    const todaysMenu = messMenu[day] || {};
+    const allDishes = new Set(Object.values(todaysMenu).flat());
+    const dateRef = getDailyVotesDateRef(db, dateKey);
+    const dateDoc = await dateRef.get();
+
+    if (dateDoc.exists) {
+      const dateData = dateDoc.data();
+      if (dateData?.day === day && dateData?.itemsInitialized === true) {
+        menuCache.set(cacheKey, true, 86400);
+        console.log("Dish votes already initialized in Firestore, skipping initialization");
+        return;
       }
     }
 
-    let batch = db.batch();
-    let batchCount = 1;
-    const dateRef = getDailyVotesDateRef(db, dateKey);
-
-    batch.set(
-      dateRef,
+    await dateRef.set(
       {
         dateKey,
         day,
+        itemsInitialized: false,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
@@ -64,10 +65,8 @@ async function initializeDishVotes() {
     for (const dish of allDishes) {
       const safeDishId = getSafeDishId(dish);
       const dishRef = getDailyDishVoteRef(db, dateKey, safeDishId);
-      const doc = await dishRef.get();
-
-      if (!doc.exists) {
-        batch.set(dishRef, {
+      try {
+        await dishRef.create({
           item: dish,
           dishId: safeDishId,
           day,
@@ -77,19 +76,23 @@ async function initializeDishVotes() {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        batchCount++;
-
-        if (batchCount >= 500) {
-          await batch.commit();
-          batch = db.batch();
-          batchCount = 0;
+      } catch (error) {
+        if (error.code !== 6 && error.code !== "already-exists") {
+          throw error;
         }
       }
     }
 
-    if (batchCount > 0) {
-      await batch.commit();
-    }
+    await dateRef.set(
+      {
+        dateKey,
+        day,
+        itemsInitialized: true,
+        initializedDishCount: allDishes.size,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     menuCache.set(cacheKey, true, 86400);
     console.log("Dish votes initialized in Firestore");
@@ -98,7 +101,24 @@ async function initializeDishVotes() {
   }
 }
 
+let messInitializationPromise = null;
+
+function ensureMessDataInitialized() {
+  if (!messInitializationPromise) {
+    messInitializationPromise = (async () => {
+      await initializeMenu();
+      await initializeDishVotes();
+    })().catch((error) => {
+      messInitializationPromise = null;
+      throw error;
+    });
+  }
+
+  return messInitializationPromise;
+}
+
 module.exports = {
   initializeMenu,
   initializeDishVotes,
+  ensureMessDataInitialized,
 };

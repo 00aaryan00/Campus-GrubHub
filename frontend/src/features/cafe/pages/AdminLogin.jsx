@@ -1,7 +1,7 @@
 import { useState } from "react";
-import axios from "../api/axios";
+import axios from "../../../shared/api/axios";
 import { useNavigate } from "react-router-dom";
-import "./AdminLogin.css";
+import "../styles/AdminLogin.css";
 
 export default function AdminLogin() {
   const [adminId, setAdminId] = useState("");
@@ -18,21 +18,22 @@ export default function AdminLogin() {
 
     setLoading(true);
     setError("");
-    
+
     try {
-      const res = await axios.post("/auntys-cafe/admin-login", { 
-        adminId, 
-        password 
+      const res = await axios.post("/auntys-cafe/admin-login", {
+        adminId,
+        password,
       });
-      
-      if (res.data.success) {
-        console.log("✅ Admin Login Success");
+
+      if (res.data.success && res.data.token) {
+        localStorage.setItem("adminSessionToken", res.data.token);
+        console.log("Admin login success");
         navigate("/admin-dashboard");
       } else {
         setError("Invalid credentials. Please try again.");
       }
     } catch (err) {
-      console.error("❌ Admin Login Error:", err);
+      console.error("Admin login error:", err);
       setError("Login error. Please check your connection and try again.");
     } finally {
       setLoading(false);
@@ -40,14 +41,13 @@ export default function AdminLogin() {
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleLogin();
     }
   };
 
   return (
     <div className="admin-login-container">
-      {/* Floating Admin Icons */}
       <div className="floating-icon admin-icon-1">⚙️</div>
       <div className="floating-icon admin-icon-2">🔧</div>
       <div className="floating-icon admin-icon-3">📊</div>
@@ -60,11 +60,9 @@ export default function AdminLogin() {
       <div className="floating-icon admin-icon-10">🏛️</div>
 
       <div className="admin-login-card">
-        {/* Decorative elements */}
         <div className="decorative-circle decorative-circle-1"></div>
         <div className="decorative-circle decorative-circle-2"></div>
 
-        {/* Logo and Title */}
         <div className="admin-header">
           <div className="admin-logo">🏛️</div>
           <h1 className="admin-title">Admin Portal</h1>
@@ -72,7 +70,6 @@ export default function AdminLogin() {
           <p className="admin-tagline">"Control Panel for Campus Dining Excellence"</p>
         </div>
 
-        {/* Feature highlights */}
         <div className="admin-features">
           <div className="feature-item">
             <div className="feature-icon">📊</div>
@@ -87,14 +84,9 @@ export default function AdminLogin() {
             <div className="feature-text">User Management</div>
           </div>
         </div>
-        
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
 
-        {/* Login Form */}
+        {error && <div className="error-message">{error}</div>}
+
         <div className="login-form">
           <div className="input-group">
             <div className="input-wrapper">
@@ -104,7 +96,7 @@ export default function AdminLogin() {
                 placeholder="Admin ID"
                 value={adminId}
                 onChange={(e) => setAdminId(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyPress}
                 className="admin-input"
                 disabled={loading}
               />
@@ -119,18 +111,14 @@ export default function AdminLogin() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyPress}
                 className="admin-input"
                 disabled={loading}
               />
             </div>
           </div>
 
-          <button 
-            onClick={handleLogin}
-            disabled={loading}
-            className="admin-login-btn"
-          >
+          <button onClick={handleLogin} disabled={loading} className="admin-login-btn">
             {loading ? (
               <>
                 <div className="loading-spinner"></div>
@@ -145,11 +133,8 @@ export default function AdminLogin() {
           </button>
         </div>
 
-        {/* Admin privileges info */}
         <div className="admin-privileges">
-          <div className="privileges-title">
-            🛡️ Admin Privileges
-          </div>
+          <div className="privileges-title">🛡️ Admin Privileges</div>
           <div className="privileges-grid">
             <div>📋 Manage cafe menu</div>
             <div>📊 View analytics</div>
@@ -159,20 +144,17 @@ export default function AdminLogin() {
         </div>
 
         <div className="admin-help">
-          <div className="help-title">
-            🔧 Need Help?
-          </div>
+          <div className="help-title">🔧 Need Help?</div>
           <div className="help-content">
-            • Contact IT support for login issues<br/>
-            • Ensure you have admin privileges<br/>
+            • Contact IT support for login issues
+            <br />
+            • Ensure you have admin privileges
+            <br />
             • Check with system administrator
           </div>
         </div>
 
-        {/* Footer tagline */}
-        <div className="admin-footer">
-          "Empowering Campus Dining Management" 🏛️
-        </div>
+        <div className="admin-footer">"Empowering Campus Dining Management" 🏛️</div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 // hooks/useGlobalNotifications.js
 import { useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../config/firebase';
 import { NotificationManager } from '../utils/notifications';
 
 // Enhanced global notification hook that works for ALL users and in background

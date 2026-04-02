@@ -73,7 +73,7 @@ export class NotificationManager {
     }
   }
 
-  static handleNotificationClick(tag, options) {
+  static handleNotificationClick(tag) {
     // Parse tag to determine action
     if (tag.startsWith('new-dish-')) {
       // Navigate to menu page
@@ -83,13 +83,13 @@ export class NotificationManager {
       window.location.href = '/admin/orders';
     } else if (tag.startsWith('status-')) {
       // Navigate to user orders page
-      window.location.href = '/orders';
+      window.location.href = '/my-orders';
     } else if (tag.startsWith('pickup-time-')) {
       // Navigate to user orders page
-      window.location.href = '/orders';
+      window.location.href = '/my-orders';
     } else if (tag.startsWith('notes-')) {
       // Navigate to user orders page
-      window.location.href = '/orders';
+      window.location.href = '/my-orders';
     }
   }
 
@@ -210,7 +210,7 @@ export class NotificationManager {
       try {
         const userData = JSON.parse(storedUser);
         return userData.email;
-      } catch (e) {
+      } catch {
         console.log('Could not parse stored user data');
       }
     }
@@ -311,7 +311,7 @@ export class NotificationManager {
   }
 
   // Enhanced method: Show new dish notification (for ALL users) - This should work for everyone
-  static showNewDishNotification(dish, isAdmin = false) {
+  static showNewDishNotification(dish) {
     const title = '🍽️ New Dish Added!';
     const body = `${dish.name} - ₹${dish.price}\n${dish.veg ? '🥬 Vegetarian' : '🥩 Non-Vegetarian'}`;
     

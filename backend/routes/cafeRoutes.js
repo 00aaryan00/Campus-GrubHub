@@ -1,5 +1,6 @@
 const express = require("express");
 const verifyCafeToken = require("../middlewares/cafeAuth");
+const { verifyAdminSession } = require("../middlewares/adminSessionAuth");
 const {
   adminLogin,
   getAdminDashboard,
@@ -17,9 +18,9 @@ const {
 const router = express.Router();
 
 router.post("/admin-login", adminLogin);
-router.get("/admin-dashboard", getAdminDashboard);
-router.post("/admin-dashboard", updateAdminDashboard);
-router.delete("/admin-dashboard", deleteAdminDish);
+router.get("/admin-dashboard", verifyAdminSession, getAdminDashboard);
+router.post("/admin-dashboard", verifyAdminSession, updateAdminDashboard);
+router.delete("/admin-dashboard", verifyAdminSession, deleteAdminDish);
 
 router.get("/menu", getCafeMenu);
 router.post("/vote", verifyCafeToken, voteOnCafeDish);

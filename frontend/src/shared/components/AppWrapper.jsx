@@ -1,7 +1,7 @@
 // components/AppWrapper.js
 import React, { useEffect, useState } from 'react';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
-import { auth } from '../firebase';
+import { auth } from '../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const AppWrapper = ({ children }) => {

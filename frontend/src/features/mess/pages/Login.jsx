@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { signInWithPopup, onAuthStateChanged } from "firebase/auth";
-import { auth, provider } from "../firebase";
+import { auth, provider } from "../../../shared/config/firebase";
 
 function Login() {
   const [loading, setLoading] = useState(false);

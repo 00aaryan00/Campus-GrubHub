@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import axios from "../api/axios";
+import axios from "../../../shared/api/axios";
 import { useNavigate, Link } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebase";
-import "./AuntysCafe.css";
+import { auth } from "../../../shared/config/firebase";
+import "../styles/AuntysCafe.css";
 
 // Import the global notifications hook
-import { useGlobalNotifications } from "../hooks/useGlobalNotifications";
+import { useGlobalNotifications } from "../../../shared/hooks/useGlobalNotifications";
 
 export default function AuntysCafe() {
   const [menu, setMenu] = useState([]);

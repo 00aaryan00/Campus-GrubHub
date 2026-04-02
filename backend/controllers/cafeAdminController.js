@@ -1,6 +1,7 @@
 const { admin, db } = require("../config/firebase");
 const normalizeDocId = require("../utils/normalizeDocId");
 const { v4: uuidv4 } = require("uuid");
+const { createAdminSessionToken } = require("../middlewares/adminSessionAuth");
 
 async function adminLogin(req, res) {
   const { adminId, password } = req.body;
@@ -11,7 +12,8 @@ async function adminLogin(req, res) {
       return res.status(401).json({ success: false, error: "Invalid credentials" });
     }
 
-    res.json({ success: true });
+    const token = createAdminSessionToken(adminId);
+    res.json({ success: true, token });
   } catch (error) {
     res.status(500).json({ success: false, error: "Login failed" });
   }
@@ -95,11 +97,15 @@ async function deleteAdminDish(req, res) {
 
     const userVotesSnapshot = await db.collection("cafeUserVotes").get();
     for (const userDoc of userVotesSnapshot.docs) {
-      const userData = userDoc.data();
-      if (userData[normalizedName]) {
-        batch.update(db.collection("cafeUserVotes").doc(userDoc.id), {
-          [normalizedName]: admin.firestore.FieldValue.delete(),
-        });
+      const userVoteItemRef = db
+        .collection("cafeUserVotes")
+        .doc(userDoc.id)
+        .collection("items")
+        .doc(dishId);
+      const userVoteItemDoc = await userVoteItemRef.get();
+
+      if (userVoteItemDoc.exists) {
+        batch.delete(userVoteItemRef);
       }
     }
 

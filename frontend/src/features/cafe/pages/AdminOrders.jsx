@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../../../shared/config/firebase';
 import { toast } from 'react-hot-toast';
-import { NotificationManager } from '../utils/notifications';
+import { NotificationManager } from '../../../shared/utils/notifications';
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Calendar, TrendingUp, Users, Award, Filter } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
-import './stats.css';
+import { db } from '../../../shared/config/firebase';
+import '../styles/StatsPage.css';
 
 const fetchVoteData = async () => {
   try {

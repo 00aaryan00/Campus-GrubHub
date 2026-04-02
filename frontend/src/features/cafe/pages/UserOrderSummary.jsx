@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { db } from '../firebase';
-import { NotificationManager } from '../utils/notifications';
-import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
-import './UserOrderSummary.css';
+import { db } from '../../../shared/config/firebase';
+import { NotificationManager } from '../../../shared/utils/notifications';
+import { useGlobalNotifications } from '../../../shared/hooks/useGlobalNotifications';
+import '../styles/UserOrderSummary.css';
 
 const UserOrderSummary = () => {
   const [orders, setOrders] = useState([]);
@@ -14,7 +14,7 @@ const UserOrderSummary = () => {
   const [notificationPermission, setNotificationPermission] = useState('default');
 
   // Initialize global notifications for this user
-  const { showNotification, showToast } = useGlobalNotifications(user?.email, false);
+  useGlobalNotifications(user?.email, false);
 
   // Check notification permission status
   useEffect(() => {

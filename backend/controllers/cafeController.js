@@ -1,6 +1,10 @@
 const { admin, db } = require("../config/firebase");
 const normalizeDocId = require("../utils/normalizeDocId");
 
+function getCafeUserVoteDocRef(userId, dishId) {
+  return db.collection("cafeUserVotes").doc(userId).collection("items").doc(dishId);
+}
+
 async function getCafeMenu(req, res) {
   try {
     const snapshot = await db.collection("specialMenu").where("available", "==", true).get();
@@ -45,35 +49,69 @@ async function voteOnCafeDish(req, res) {
     const availabilityTimestamp = currentPeriod?.availableFrom || new Date().toISOString();
     const finalDishId = dishDoc.data().dishId || dishId;
 
+    if (!finalDishId) {
+      return res.status(400).json({ success: false, error: "Dish ID is required" });
+    }
+
     const userVotesRef = db.collection("cafeUserVotes").doc(userId);
+    const userVoteItemRef = getCafeUserVoteDocRef(userId, finalDishId);
     const dishVotesRef = db.collection("cafeDishVotes").doc(normalizedName);
 
     await db.runTransaction(async (transaction) => {
-      const userVotesDoc = await transaction.get(userVotesRef);
-      const existingVote = userVotesDoc.exists ? userVotesDoc.data()[normalizedName] : null;
+      const [userVoteItemDoc, dishVotesDoc] = await Promise.all([
+        transaction.get(userVoteItemRef),
+        transaction.get(dishVotesRef),
+      ]);
+      const existingVote = userVoteItemDoc.exists ? userVoteItemDoc.data() : null;
 
       if (existingVote && existingVote.availabilityTimestamp === availabilityTimestamp) {
+        const decrements = {};
         if (existingVote.type === "like") {
-          transaction.update(dishVotesRef, {
-            likes: admin.firestore.FieldValue.increment(-1),
-          });
+          decrements.likes = admin.firestore.FieldValue.increment(-1);
         } else if (existingVote.type === "dislike") {
-          transaction.update(dishVotesRef, {
-            dislikes: admin.firestore.FieldValue.increment(-1),
-          });
+          decrements.dislikes = admin.firestore.FieldValue.increment(-1);
+        }
+
+        if (Object.keys(decrements).length > 0) {
+          if (dishVotesDoc.exists) {
+            transaction.update(dishVotesRef, decrements);
+          } else {
+            transaction.set(
+              dishVotesRef,
+              {
+                dishName,
+                dishId: finalDishId,
+                price: dishDoc.data().price || 0,
+                veg: dishDoc.data().veg !== undefined ? dishDoc.data().veg : true,
+                likes: 0,
+                dislikes: 0,
+                ...decrements,
+              },
+              { merge: true }
+            );
+          }
         }
       }
 
       transaction.set(
         userVotesRef,
         {
-          [normalizedName]: {
-            type: vote,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            userName,
-            dishId: finalDishId,
-            availabilityTimestamp,
-          },
+          userId,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      transaction.set(
+        userVoteItemRef,
+        {
+          dishId: finalDishId,
+          dishName,
+          normalizedName,
+          type: vote,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          userName,
+          availabilityTimestamp,
         },
         { merge: true }
       );
@@ -232,10 +270,21 @@ async function getCafeUserVotes(req, res) {
       return res.status(403).json({ success: false, error: "User mismatch" });
     }
 
-    const doc = await db.collection("cafeUserVotes").doc(req.params.userId).get();
+    const userVotesRef = db.collection("cafeUserVotes").doc(req.params.userId);
+    const itemSnapshot = await userVotesRef.collection("items").get();
+
+    const votes = {};
+
+    itemSnapshot.forEach((itemDoc) => {
+      const itemData = itemDoc.data();
+      if (itemData.normalizedName) {
+        votes[itemData.normalizedName] = itemData;
+      }
+    });
+
     res.json({
       success: true,
-      votes: doc.exists ? doc.data() : {},
+      votes,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to fetch user votes" });

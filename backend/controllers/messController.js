@@ -6,12 +6,22 @@ const {
   userVotesCache,
   leaderboardCache,
 } = require("../services/cacheService");
-const { initializeMenu, initializeDishVotes } = require("../services/menuInitializationService");
+const {
+  initializeMenu,
+  initializeDishVotes,
+  ensureMessDataInitialized,
+} = require("../services/menuInitializationService");
 const { getCurrentDayName, getCurrentDateKey } = require("../utils/time");
 const { getDailyVotesDateRef, getDailyDishVoteRef, getSafeDishId } = require("../utils/messVoteKeys");
 
+function normalizeVoteCount(value) {
+  const numericValue = Number(value) || 0;
+  return Math.max(0, numericValue);
+}
+
 async function getMenu(req, res) {
   try {
+    await ensureMessDataInitialized();
     const today = getCurrentDayName();
     const dateKey = getCurrentDateKey();
     const cacheKey = `menu_${dateKey}`;
@@ -38,7 +48,10 @@ async function getMenu(req, res) {
         const item = allTodayItems[index];
         if (doc.exists) {
           const data = doc.data();
-          votesMap[item] = { like: data.like || 0, dislike: data.dislike || 0 };
+          votesMap[item] = {
+            like: normalizeVoteCount(data.like),
+            dislike: normalizeVoteCount(data.dislike),
+          };
         } else {
           votesMap[item] = { like: 0, dislike: 0 };
         }
@@ -71,6 +84,7 @@ async function voteOnDish(req, res) {
   }
 
   try {
+    await ensureMessDataInitialized();
     const safeDishId = getSafeDishId(item);
     const userVoteRef = db.collection("userVotes").doc(`${userId}_${safeDishId}_${dateKey}`);
     const dateRef = getDailyVotesDateRef(db, dateKey);
@@ -92,6 +106,8 @@ async function voteOnDish(req, res) {
             like: 0,
             dislike: 0,
           };
+      let nextLikeCount = normalizeVoteCount(dishVoteData.like);
+      let nextDislikeCount = normalizeVoteCount(dishVoteData.dislike);
 
       if (!dishVoteDoc.exists) {
         transaction.set(
@@ -111,11 +127,21 @@ async function voteOnDish(req, res) {
       }
 
       const currentVote = userVoteDoc.exists ? userVoteDoc.data().voteType : null;
-      const updates = {};
 
-      if (currentVote === type && type !== "neutral") {
+      if (type === "neutral" && currentVote) {
         transaction.delete(userVoteRef);
-        updates[type] = admin.firestore.FieldValue.increment(-1);
+        if (currentVote === "like") {
+          nextLikeCount = Math.max(0, nextLikeCount - 1);
+        } else if (currentVote === "dislike") {
+          nextDislikeCount = Math.max(0, nextDislikeCount - 1);
+        }
+      } else if (currentVote === type && type !== "neutral") {
+        transaction.delete(userVoteRef);
+        if (type === "like") {
+          nextLikeCount = Math.max(0, nextLikeCount - 1);
+        } else if (type === "dislike") {
+          nextDislikeCount = Math.max(0, nextDislikeCount - 1);
+        }
       } else if (currentVote && type !== "neutral") {
         transaction.set(
           userVoteRef,
@@ -129,8 +155,17 @@ async function voteOnDish(req, res) {
           },
           { merge: true }
         );
-        updates[currentVote] = admin.firestore.FieldValue.increment(-1);
-        updates[type] = admin.firestore.FieldValue.increment(1);
+        if (currentVote === "like") {
+          nextLikeCount = Math.max(0, nextLikeCount - 1);
+        } else if (currentVote === "dislike") {
+          nextDislikeCount = Math.max(0, nextDislikeCount - 1);
+        }
+
+        if (type === "like") {
+          nextLikeCount += 1;
+        } else if (type === "dislike") {
+          nextDislikeCount += 1;
+        }
       } else if (type !== "neutral") {
         transaction.set(userVoteRef, {
           userId,
@@ -140,23 +175,26 @@ async function voteOnDish(req, res) {
           dateKey,
           timestamp: timestamp || admin.firestore.FieldValue.serverTimestamp(),
         });
-        updates[type] = admin.firestore.FieldValue.increment(1);
+        if (type === "like") {
+          nextLikeCount += 1;
+        } else if (type === "dislike") {
+          nextDislikeCount += 1;
+        }
       }
 
-      if (Object.keys(updates).length > 0) {
-        transaction.set(
-          dishVoteRef,
-          {
-            ...updates,
-            item: dishVoteData.item,
-            dishId: dishVoteData.dishId,
-            day: today,
-            dateKey,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
-      }
+      transaction.set(
+        dishVoteRef,
+        {
+          item: dishVoteData.item,
+          dishId: dishVoteData.dishId,
+          day: today,
+          dateKey,
+          like: nextLikeCount,
+          dislike: nextDislikeCount,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
     });
 
     votesCache.del(`votes_${dateKey}`);
@@ -187,8 +225,8 @@ async function voteOnDish(req, res) {
     res.json({
       success: true,
       votes: {
-        like: updatedDishDoc.data().like,
-        dislike: updatedDishDoc.data().dislike,
+        like: normalizeVoteCount(updatedDishDoc.data().like),
+        dislike: normalizeVoteCount(updatedDishDoc.data().dislike),
       },
       userVotes: userVotesMap,
     });
@@ -200,6 +238,7 @@ async function voteOnDish(req, res) {
 
 async function getUserVotes(req, res) {
   try {
+    await ensureMessDataInitialized();
     const userId = req.user.uid;
     const today = getCurrentDayName();
     const dateKey = getCurrentDateKey();
@@ -231,6 +270,7 @@ async function getUserVotes(req, res) {
 
 async function getLeaderboard(req, res) {
   try {
+    await ensureMessDataInitialized();
     const dateKey = getCurrentDateKey();
     const cacheKey = `leaderboard_${dateKey}`;
     let leaderboard = leaderboardCache.get(cacheKey);
@@ -240,7 +280,7 @@ async function getLeaderboard(req, res) {
       leaderboard = votesSnapshot.docs
         .map((doc) => {
           const data = doc.data();
-          return { _id: data.item, count: data.like || 0 };
+          return { _id: data.item, count: normalizeVoteCount(data.like) };
         })
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);

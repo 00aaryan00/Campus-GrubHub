@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
-import axiosInstance from "../api/axiosConfig";
-import { auth } from "../firebase";
+import axiosInstance from "../../../shared/api/axiosConfig";
+import { auth } from "../../../shared/config/firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-import "./Home.css";
+import "../styles/Home.css";
 
 const Home = () => {
   const [menu, setMenu] = useState({});
@@ -32,6 +32,10 @@ const Home = () => {
   const lastSaveUserRef = useRef(null); // Track last save-user call time
   const saveUserCooldown = 30000; // 30 seconds cooldown for save-user
   const saveUserTimeoutRef = useRef(null);
+  const latestLoadRequestRef = useRef(0);
+  const lastVoteMutationAtRef = useRef(0);
+  const latestSecondaryLoadRequestRef = useRef(0);
+  const voteRequestIdsRef = useRef({});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -81,7 +85,7 @@ const Home = () => {
   }, [addFloatingIcon]);
 
   const loadInitialData = useCallback(
-    async (forceRegular = false, forceRefresh = false) => {
+    async (forceRegular = false, forceRefresh = false, authTokenOverride = authToken) => {
       // Prevent concurrent calls
       if (isLoadingRef.current && !forceRefresh) {
         console.log("Skipping loadInitialData - already loading");
@@ -91,6 +95,7 @@ const Home = () => {
       try {
         isLoadingRef.current = true;
         const now = Date.now();
+        const requestId = ++latestLoadRequestRef.current;
         
         // Check cache using refs to get latest values without causing dependency issues
         const currentCache = dataCacheRef.current;
@@ -109,19 +114,21 @@ const Home = () => {
         setLoading(true);
         setError(null);
 
-        const [menuResponse, quoteResponse, leaderboardResponse, userVotesResponse] = await Promise.allSettled([
+        const [menuResponse, userVotesResponse] = await Promise.allSettled([
           axiosInstance.get("/menu"),
-          axiosInstance.get("/daily-quote"),
-          axiosInstance.get("/leaderboard"),
-          authToken
+          authTokenOverride
             ? axiosInstance.get("/user-votes", {
-                headers: { Authorization: `Bearer ${authToken}` },
+                headers: { Authorization: `Bearer ${authTokenOverride}` },
               })
             : Promise.resolve({ data: {} }),
         ]);
 
         if (menuResponse.status !== "fulfilled") {
           throw menuResponse.reason;
+        }
+
+        if (authTokenOverride && userVotesResponse.status !== "fulfilled") {
+          throw userVotesResponse.reason;
         }
 
         const menuPayload = menuResponse.value?.data || {};
@@ -133,6 +140,11 @@ const Home = () => {
         };
         const votesData = menuPayload.votes || {};
         const dayData = menuPayload.day || "";
+        const hasNewerVoteMutation = lastVoteMutationAtRef.current > now;
+
+        if (requestId !== latestLoadRequestRef.current) {
+          return;
+        }
 
         setDataCache((prev) => {
           if (prev.lastVoteDay !== dayData) {
@@ -146,14 +158,41 @@ const Home = () => {
         });
 
         setMenu(menuData);
-        setVotes(votesData);
         setDay(dayData);
         setError(null);
-        setQuote(quoteResponse.status === "fulfilled" ? quoteResponse.value.data?.quote || "" : "");
-        setLeaderboard(leaderboardResponse.status === "fulfilled" ? leaderboardResponse.value.data || [] : []);
-        if (userVotesResponse.status === "fulfilled" && userVotesResponse.value.data) {
+
+        if (!hasNewerVoteMutation) {
+          setVotes(votesData);
+        }
+
+        if (!hasNewerVoteMutation && userVotesResponse.status === "fulfilled" && userVotesResponse.value.data) {
           setUserVotes(userVotesResponse.value.data);
         }
+
+        const secondaryRequestId = ++latestSecondaryLoadRequestRef.current;
+        void (async () => {
+          const [quoteResponse, leaderboardResponse] = await Promise.allSettled([
+            axiosInstance.get("/daily-quote"),
+            axiosInstance.get("/leaderboard"),
+          ]);
+
+          if (
+            requestId !== latestLoadRequestRef.current ||
+            secondaryRequestId !== latestSecondaryLoadRequestRef.current
+          ) {
+            return;
+          }
+
+          if (quoteResponse.status === "fulfilled") {
+            setQuote(quoteResponse.value.data?.quote || "");
+          }
+
+          if (leaderboardResponse.status === "fulfilled") {
+            setLeaderboard(leaderboardResponse.value.data || []);
+          }
+        })().catch((secondaryError) => {
+          console.error("Error loading secondary data:", secondaryError);
+        });
       } catch (error) {
         console.error("Error loading data:", error);
         setError(`Failed to load menu: ${error.message}`);
@@ -166,7 +205,7 @@ const Home = () => {
     [authToken] // Removed dataCache and day from dependencies to prevent recreation loop
   );
 
-  const debouncedLoadInitialData = useCallback(debounce(loadInitialData, 1000), [loadInitialData]);
+  const debouncedLoadInitialData = useMemo(() => debounce(loadInitialData, 1000), [loadInitialData]);
 
   useEffect(() => {
     let isMounted = true;
@@ -225,14 +264,14 @@ const Home = () => {
             lastSaveUserRef.current = now;
           }
 
-          await loadInitialData(true);
+          await loadInitialData(true, false, token);
           hasInitializedRef.current = true;
         } else {
           // User logged out - still need to load menu for non-authenticated view
           setUser(null);
           setAuthToken(null);
           setUserVotes({});
-          await loadInitialData(true);
+          await loadInitialData(true, false, null);
           hasInitializedRef.current = true;
         }
       } catch (error) {
@@ -249,59 +288,90 @@ const Home = () => {
     };
   }, [loadInitialData]);
 
-  const handleVoteClick = async (item, type, retryCount = 0) => {
+  const handleVoteClick = async (item, type) => {
     if (!user || !authToken || processingVotes[item]) return;
+
+    const requestId = (voteRequestIdsRef.current[item] || 0) + 1;
+    voteRequestIdsRef.current[item] = requestId;
+
+    const previousVote = userVotes[item];
+    const previousVotes = votes[item] || { like: 0, dislike: 0 };
+    const optimisticVotes = { ...previousVotes };
+    const optimisticUserVotes = { ...userVotes };
+    const intendedType = previousVote === type ? "neutral" : type;
+
+    if (previousVote) {
+      optimisticVotes[previousVote] = Math.max(0, (optimisticVotes[previousVote] || 0) - 1);
+    }
+    if (intendedType !== "neutral") {
+      optimisticVotes[intendedType] = (optimisticVotes[intendedType] || 0) + 1;
+      optimisticUserVotes[item] = intendedType;
+    } else {
+      delete optimisticUserVotes[item];
+    }
 
     setProcessingVotes((prev) => ({ ...prev, [item]: true }));
     setError(null);
+    lastVoteMutationAtRef.current = Date.now();
+    setVotes((prev) => ({ ...prev, [item]: optimisticVotes }));
+    setUserVotes(optimisticUserVotes);
 
-    try {
-      const previousVote = userVotes[item];
-      const previousVotes = votes[item] || { like: 0, dislike: 0 };
-      const newVotes = { ...previousVotes };
-      const newUserVotes = { ...userVotes };
+    const sendVoteRequest = async (attempt = 0) => {
+      try {
+        const response = await axiosInstance.post(
+          "/vote",
+          { item, type: intendedType, day, timestamp: Date.now() },
+          { headers: { Authorization: `Bearer ${authToken}` } }
+        );
 
-      const newType = userVotes[item] === type ? "neutral" : type;
+        if (voteRequestIdsRef.current[item] !== requestId) {
+          return;
+        }
 
-      if (previousVote) {
-        newVotes[previousVote] = Math.max(0, (newVotes[previousVote] || 0) - 1);
-      }
-      if (newType !== "neutral") {
-        newVotes[newType] = (newVotes[newType] || 0) + 1;
-        newUserVotes[item] = newType;
-      } else {
-        delete newUserVotes[item];
-      }
+        if (!response.data.success) {
+          throw new Error("Vote not recorded");
+        }
 
-      setVotes((prev) => ({ ...prev, [item]: newVotes }));
-      setUserVotes(newUserVotes);
-
-      const response = await axiosInstance.post(
-        "/vote",
-        { item, type, day, timestamp: Date.now() },
-        { headers: { Authorization: `Bearer ${authToken}` } }
-      );
-
-      if (response.data.success) {
         setVotes((prev) => ({
           ...prev,
           [item]: response.data.votes || prev[item],
         }));
-        setUserVotes(response.data.userVotes || newUserVotes);
-      } else {
-        throw new Error("Vote not recorded");
-      }
-    } catch (error) {
-      console.error("Vote error:", error);
-      if (retryCount < 2) {
-        setTimeout(() => handleVoteClick(item, type, retryCount + 1), 1000);
-      } else {
-        debouncedLoadInitialData(true);
+        setUserVotes(response.data.userVotes || optimisticUserVotes);
+      } catch (error) {
+        if (voteRequestIdsRef.current[item] !== requestId) {
+          return;
+        }
+
+        console.error("Vote error:", error);
+        if (attempt < 2) {
+          setTimeout(() => {
+            if (voteRequestIdsRef.current[item] === requestId) {
+              void sendVoteRequest(attempt + 1);
+            }
+          }, 1000);
+          return;
+        }
+
+        setVotes((prev) => ({ ...prev, [item]: previousVotes }));
+        setUserVotes((prev) => {
+          const restoredVotes = { ...prev };
+          if (previousVote) {
+            restoredVotes[item] = previousVote;
+          } else {
+            delete restoredVotes[item];
+          }
+          return restoredVotes;
+        });
+        debouncedLoadInitialData(true, true);
         setError("Failed to record vote after retries. Data refreshed.");
+      } finally {
+        if (voteRequestIdsRef.current[item] === requestId) {
+          setProcessingVotes((prev) => ({ ...prev, [item]: false }));
+        }
       }
-    } finally {
-      setProcessingVotes((prev) => ({ ...prev, [item]: false }));
-    }
+    };
+
+    await sendVoteRequest();
   };
 
   const handleLogout = () => {

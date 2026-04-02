@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
-import axios from "../api/axios";
-import { Link } from "react-router-dom";
-import { NotificationManager } from "../utils/notifications";
+import axios from "../../../shared/api/axios";
+import { Link, useNavigate } from "react-router-dom";
+import { NotificationManager } from "../../../shared/utils/notifications";
 import { v4 as uuidv4 } from "uuid";
-import { Coffee, Plus, Search, Trash2, Bell, ShoppingCart, Eye, EyeOff, Check, X } from "lucide-react";
+import { Coffee, Plus, Search, Trash2, Bell, ShoppingCart, Eye, EyeOff, Check } from "lucide-react";
 
 export default function AdminDashboard() {
   const [items, setItems] = useState([]);
@@ -11,12 +11,49 @@ export default function AdminDashboard() {
   const [previousItems, setPreviousItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showDeletePopup, setShowDeletePopup] = useState(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const navigate = useNavigate();
+
+  const getAdminHeaders = useCallback(() => {
+    const token = localStorage.getItem("adminSessionToken");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
+
+  const handleUnauthorized = useCallback(() => {
+    localStorage.removeItem("adminSessionToken");
+    NotificationManager.showToast("Admin session expired. Please log in again.", "warning");
+    navigate("/admin-login");
+  }, [navigate]);
 
   // REMOVED: useMenuNotifications hook - global system handles all notifications
 
+  const fetchMenu = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/auntys-cafe/admin-dashboard", {
+        headers: getAdminHeaders(),
+      });
+      const fetchedItems = res.data.items || [];
+      setItems(fetchedItems);
+      setPreviousItems(fetchedItems);
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      console.error("Error fetching admin menu:", err);
+      NotificationManager.showToast("Error loading menu items", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [getAdminHeaders, handleUnauthorized]);
+
   useEffect(() => {
     const initializeComponent = async () => {
+      if (!localStorage.getItem("adminSessionToken")) {
+        navigate("/admin-login");
+        return;
+      }
+
       try {
         const permissionGranted = await NotificationManager.requestPermission();
         if (permissionGranted) {
@@ -33,22 +70,7 @@ export default function AdminDashboard() {
     };
 
     initializeComponent();
-  }, []);
-
-  const fetchMenu = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get("/auntys-cafe/admin-dashboard");
-      const fetchedItems = res.data.items || [];
-      setItems(fetchedItems);
-      setPreviousItems(fetchedItems);
-    } catch (err) {
-      console.error("Error fetching admin menu:", err);
-      NotificationManager.showToast("Error loading menu items", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  }, [fetchMenu, navigate]);
 
   const handleAddItem = () => {
     const newItem = {
@@ -81,12 +103,17 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       await axios.delete("/auntys-cafe/admin-dashboard", {
+        headers: getAdminHeaders(),
         data: { dishName: item.name, dishId: item.dishId },
       });
       setItems(items.filter((i) => i.dishId !== item.dishId));
       setPreviousItems(previousItems.filter((i) => i.dishId !== item.dishId));
       NotificationManager.showToast(`Dish "${item.name}" deleted permanently`, "success");
     } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       console.error("Error deleting item:", err);
       NotificationManager.showToast(`Error deleting dish: ${err.response?.data?.error || err.message}`, "error");
     } finally {
@@ -123,9 +150,15 @@ export default function AdminDashboard() {
           : item.availabilityHistory || [{ availableFrom: new Date().toISOString(), availableTo: item.available ? null : new Date().toISOString() }],
       }));
 
-      const response = await axios.post("/auntys-cafe/admin-dashboard", {
-        items: itemsWithAvailability,
-      });
+      await axios.post(
+        "/auntys-cafe/admin-dashboard",
+        {
+          items: itemsWithAvailability,
+        },
+        {
+          headers: getAdminHeaders(),
+        }
+      );
 
       // Show admin feedback
       if (newItems.length > 0) {
@@ -155,6 +188,10 @@ export default function AdminDashboard() {
       setPreviousItems(validItems);
       setItems(validItems.map((item) => ({ ...item, isNew: false })));
     } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       console.error("Submit error:", err);
       let errorMessage = err.response?.data?.error || err.message || "Unknown error occurred";
       NotificationManager.showToast(`Error updating menu: ${errorMessage}`, "error");
@@ -164,7 +201,7 @@ export default function AdminDashboard() {
   };
 
   const handleAccessPreOrder = () => {
-    window.open("http://localhost:5173/admin/orders", "_blank");
+    window.open("/admin/orders", "_blank");
     NotificationManager.showToast("Opening pre-orders management", "info");
   };
 
@@ -477,4 +514,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

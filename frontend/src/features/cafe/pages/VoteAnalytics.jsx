@@ -6,7 +6,7 @@ import {
 import { TrendingUp, Users, Award, Filter, AlertCircle, RefreshCw, Search, Coffee, Heart, ThumbsDown, Star, Calendar, Trophy } from 'lucide-react';
 
 // Import Firebase from your existing firebase.js file
-import { db } from '../firebase'; // Adjust path as needed
+import { db } from '../../../shared/config/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
 // Updated cafe theme colors for pie chart with more variety
@@ -59,36 +59,21 @@ const VoteAnalytics = () => {
 
       const allVotes = [];
       
-      for (const itemDoc of cafeUserVotesSnapshot.docs) {
-        const itemData = itemDoc.data();
-        
-        console.log('User vote document:', itemDoc.id, itemData);
-        
-        // Handle different possible data structures
-        if (itemData.timestamp && itemData.type && itemData.userName) {
-          // Single vote stored directly in document
-          allVotes.push({
-            id: itemDoc.id,
-            item: itemDoc.id,
-            type: itemData.type,
-            timestamp: itemData.timestamp.toDate ? itemData.timestamp.toDate() : new Date(itemData.timestamp),
-            userName: itemData.userName
-          });
-        } else {
-          // Loop through each vote key (dish ID) in the user vote document
-          Object.keys(itemData).forEach(key => {
-            const voteData = itemData[key];
-            if (voteData && typeof voteData === 'object' && voteData.type && voteData.timestamp) {
-              allVotes.push({
-                id: `${itemDoc.id}_${key}`,
-                item: key, // Use the key itself as the dish name
-                type: voteData.type,
-                timestamp: voteData.timestamp.toDate ? voteData.timestamp.toDate() : new Date(voteData.timestamp),
-                userName: voteData.userName || 'Unknown'
-              });
-            }
-          });
-        }
+      for (const userDoc of cafeUserVotesSnapshot.docs) {
+        console.log('User vote document:', userDoc.id, userDoc.data());
+        const itemVotesSnapshot = await getDocs(collection(db, 'cafeUserVotes', userDoc.id, 'items'));
+        itemVotesSnapshot.forEach((voteDoc) => {
+          const voteEntry = voteDoc.data();
+          if (voteEntry && voteEntry.type && voteEntry.timestamp) {
+            allVotes.push({
+              id: `${userDoc.id}_${voteDoc.id}`,
+              item: voteEntry.dishName || voteEntry.normalizedName || voteDoc.id,
+              type: voteEntry.type,
+              timestamp: voteEntry.timestamp.toDate ? voteEntry.timestamp.toDate() : new Date(voteEntry.timestamp),
+              userName: voteEntry.userName || 'Unknown'
+            });
+          }
+        });
       }
 
       console.log('Final data:', {

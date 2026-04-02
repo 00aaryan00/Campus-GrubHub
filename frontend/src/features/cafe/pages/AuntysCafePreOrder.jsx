@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { db } from '../firebase';
-import { NotificationManager } from '../utils/notifications';
+import { db } from '../../../shared/config/firebase';
+import { NotificationManager } from '../../../shared/utils/notifications';
 
-import { useGlobalNotifications } from '../hooks/useGlobalNotifications'; // ✅ ADD THIS IMPORT
+import { useGlobalNotifications } from '../../../shared/hooks/useGlobalNotifications';
 
 
 const PreOrderMenu = () => {
