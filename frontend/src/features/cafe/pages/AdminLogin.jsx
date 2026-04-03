@@ -27,8 +27,12 @@ export default function AdminLogin() {
 
       if (res.data.success && res.data.token) {
         localStorage.setItem("adminSessionToken", res.data.token);
+        sessionStorage.setItem("adminSessionToken", res.data.token);
         console.log("Admin login success");
-        navigate("/admin-dashboard");
+        navigate("/admin-dashboard", {
+          replace: true,
+          state: { adminSessionToken: res.data.token },
+        });
       } else {
         setError("Invalid credentials. Please try again.");
       }

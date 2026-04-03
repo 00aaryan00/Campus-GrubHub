@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "../../../shared/api/axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { NotificationManager } from "../../../shared/utils/notifications";
 import { v4 as uuidv4 } from "uuid";
 import { Coffee, Plus, Search, Trash2, Bell, ShoppingCart, Eye, EyeOff, Check } from "lucide-react";
@@ -12,14 +12,24 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDeletePopup, setShowDeletePopup] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const getStoredAdminToken = useCallback(() => {
+    return (
+      location.state?.adminSessionToken ||
+      localStorage.getItem("adminSessionToken") ||
+      sessionStorage.getItem("adminSessionToken")
+    );
+  }, [location.state]);
 
   const getAdminHeaders = useCallback(() => {
-    const token = localStorage.getItem("adminSessionToken");
+    const token = getStoredAdminToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
-  }, []);
+  }, [getStoredAdminToken]);
 
   const handleUnauthorized = useCallback(() => {
     localStorage.removeItem("adminSessionToken");
+    sessionStorage.removeItem("adminSessionToken");
     NotificationManager.showToast("Admin session expired. Please log in again.", "warning");
     navigate("/admin-login");
   }, [navigate]);
@@ -49,10 +59,14 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const initializeComponent = async () => {
-      if (!localStorage.getItem("adminSessionToken")) {
+      const token = getStoredAdminToken();
+      if (!token) {
         navigate("/admin-login");
         return;
       }
+
+      localStorage.setItem("adminSessionToken", token);
+      sessionStorage.setItem("adminSessionToken", token);
 
       try {
         const permissionGranted = await NotificationManager.requestPermission();
@@ -70,7 +84,7 @@ export default function AdminDashboard() {
     };
 
     initializeComponent();
-  }, [fetchMenu, navigate]);
+  }, [fetchMenu, getStoredAdminToken, navigate]);
 
   const handleAddItem = () => {
     const newItem = {
