@@ -23,6 +23,7 @@ const Home = () => {
   });
   const [error, setError] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [slowInitialLoad, setSlowInitialLoad] = useState(false);
   const [floatingIcons, setFloatingIcons] = useState([]);
   const isLoadingRef = useRef(false); // Prevent concurrent API calls
   const dataCacheRef = useRef(dataCache); // Keep ref in sync with state
@@ -53,6 +54,19 @@ const Home = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isInitialLoad) {
+      setSlowInitialLoad(false);
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      setSlowInitialLoad(true);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [isInitialLoad]);
 
   // Debounce utility to prevent rapid API calls
   const debounce = (func, wait) => {
@@ -399,6 +413,11 @@ const Home = () => {
         <div className="loading-card">
           <div className="loading-spinner"></div>
           <p className="loading-text">Loading Campus GrubHub...</p>
+          {slowInitialLoad && (
+            <p className="loading-text" style={{ fontSize: "0.95rem", opacity: 0.8 }}>
+              The server may be waking up. This first load can take a few extra seconds.
+            </p>
+          )}
         </div>
       </div>
     );

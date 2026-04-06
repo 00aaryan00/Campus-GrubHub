@@ -1,7 +1,8 @@
 // src/App.jsx
 
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { warmBackend } from "./shared/utils/warmBackend";
 const Login = lazy(() => import("./features/mess/pages/Login"));
 const Home = lazy(() => import("./features/mess/pages/Home"));
 const Stats = lazy(() => import("./features/mess/pages/StatsPage"));
@@ -16,6 +17,10 @@ const AboutPage = lazy(() => import("./features/mess/pages/AboutPage"));
 
 
 function App() {
+  useEffect(() => {
+    void warmBackend();
+  }, []);
+
   return (
     <Router>
       <Suspense fallback={<div className="p-6 text-center">Loading...</div>}>
