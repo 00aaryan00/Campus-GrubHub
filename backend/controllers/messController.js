@@ -9,7 +9,6 @@ const {
 const {
   initializeMenu,
   initializeDishVotes,
-  ensureMessDataInitialized,
 } = require("../services/menuInitializationService");
 const { getCurrentDayName, getCurrentDateKey } = require("../utils/time");
 const { getDailyVotesDateRef, getDailyDishVoteRef, getSafeDishId } = require("../utils/messVoteKeys");
@@ -21,7 +20,6 @@ function normalizeVoteCount(value) {
 
 async function getMenu(req, res) {
   try {
-    await ensureMessDataInitialized();
     const today = getCurrentDayName();
     const dateKey = getCurrentDateKey();
     const cacheKey = `menu_${dateKey}`;
@@ -84,7 +82,6 @@ async function voteOnDish(req, res) {
   }
 
   try {
-    await ensureMessDataInitialized();
     const safeDishId = getSafeDishId(item);
     const userVoteRef = db.collection("userVotes").doc(`${userId}_${safeDishId}_${dateKey}`);
     const dateRef = getDailyVotesDateRef(db, dateKey);
@@ -238,7 +235,6 @@ async function voteOnDish(req, res) {
 
 async function getUserVotes(req, res) {
   try {
-    await ensureMessDataInitialized();
     const userId = req.user.uid;
     const today = getCurrentDayName();
     const dateKey = getCurrentDateKey();
@@ -270,7 +266,6 @@ async function getUserVotes(req, res) {
 
 async function getLeaderboard(req, res) {
   try {
-    await ensureMessDataInitialized();
     const dateKey = getCurrentDateKey();
     const cacheKey = `leaderboard_${dateKey}`;
     let leaderboard = leaderboardCache.get(cacheKey);

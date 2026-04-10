@@ -4,13 +4,6 @@ const admin = require("firebase-admin");
 
 const firebaseEnvKeys = Object.keys(process.env).filter((key) => key.startsWith("FIREBASE_"));
 
-console.log("Firebase env keys present:", firebaseEnvKeys);
-console.log("FIREBASE_ADMIN_PRIVATE_KEY exists:", !!process.env.FIREBASE_ADMIN_PRIVATE_KEY);
-console.log(
-  "FIREBASE_ADMIN_PRIVATE_KEY length:",
-  process.env.FIREBASE_ADMIN_PRIVATE_KEY ? process.env.FIREBASE_ADMIN_PRIVATE_KEY.length : 0
-);
-
 try {
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
 
@@ -41,8 +34,6 @@ try {
       storageBucket: `${serviceAccount.project_id}.appspot.com`,
     });
   }
-
-  console.log("Firebase Admin initialized successfully");
   module.exports = {
     admin,
     db: admin.firestore(),
@@ -57,5 +48,5 @@ try {
     "FIREBASE_ADMIN_PRIVATE_KEY length:",
     process.env.FIREBASE_ADMIN_PRIVATE_KEY ? process.env.FIREBASE_ADMIN_PRIVATE_KEY.length : 0
   );
-  process.exit(1);
+  throw error;
 }

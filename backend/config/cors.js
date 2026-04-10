@@ -12,16 +12,22 @@ function buildAllowedOrigins() {
   ];
 }
 
+function isAllowedVercelPreview(origin) {
+  return /^https:\/\/campus-grub-hub(?:-[a-z0-9-]+)?\.vercel\.app$/i.test(origin);
+}
+
 function createCorsMiddleware() {
   const allowedOrigins = buildAllowedOrigins();
 
   return cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) {
         callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+        return;
       }
+
+      const isAllowed = allowedOrigins.includes(origin) || isAllowedVercelPreview(origin);
+      callback(null, isAllowed);
     },
     credentials: true,
   });
